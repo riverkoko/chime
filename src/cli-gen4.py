@@ -33,6 +33,8 @@ basicConfig(
 )
 logger = getLogger(__name__)
 
+VERBOSE = False
+OPEN_PDF = True
 
 class FromFile(Action):
     """From File."""
@@ -157,6 +159,7 @@ def main():
             ventilated=Disposition(a.ventilated_days, a.ventilated_rate),
             mitigation_date=a.mitigation_date,
             current_date = a.current_date,
+            recovered=0, # this will need to be fixed when CHIME catches up
             )
 
         fndata  = cenv.output_dir + "/chime-projection-" + a.scenario_id + ".csv"
@@ -185,16 +188,6 @@ def main():
                     p.doubling_time = doubling_rates[2][0]
 
                 zi = zi + 1
-
-                # logger.info("i            :         %s", zi)
-                # logger.info("Doubling time:         %s", p.doubling_time)
-                # logger.info("p First Hospitalization: %s", p.date_first_hospitalized)
-                # logger.info("a First Hospitalization: %s", a.date_first_hospitalized)
-
-                # so... it truly sucks to be ahead of the curve... reconfiguring
-                # this adjustment is a little clunky and could use a bit of refinement
-                # adjusting each output to match the output expected. Need to rewrite
-                # to raw at some point
 
                 ds = Model (p)
 
@@ -353,7 +346,7 @@ def main():
 
             pdf_file = cenv.output_dir + "/chime-" + a.scenario_id + ".pdf"
             generate_pdf( pdf_file, rf, cinfo, finfo )
-            # os.system( "open " + pdf_file)
+            if OPEN_PDF: os.system( "open " + pdf_file)
 
         del cinfo
         del rf
@@ -385,7 +378,7 @@ def main():
     if a.generate_pdf >= 2 :
         pdf_file = cenv.output_dir + "/chime-report.pdf"
         generate_pdf(pdf_file, data, computed_data, head )
-        # os.system("open " + pdf_file)
+        if OPEN_PDF: os.system("open " + pdf_file)
 
     logger.info("Output directory: %s", cenv.output_dir)
 

@@ -24,6 +24,8 @@ basicConfig(
 )
 logger = getLogger(__name__)
 
+VERBOSE = False
+
 
 class Sir:
 
@@ -60,7 +62,7 @@ class Sir:
 
         if p.date_first_hospitalized is None and p.doubling_time is not None:
             # Back-projecting to when the first hospitalized case would have been admitted
-            logger.info('Using doubling_time: %s', p.doubling_time)
+            if VERBOSE: logger.info('Using doubling_time: %s', p.doubling_time)
 
             intrinsic_growth_rate = get_growth_rate(p.doubling_time)
             self.beta = get_beta(intrinsic_growth_rate,  gamma, self.susceptible, 0.0)
@@ -73,7 +75,7 @@ class Sir:
 
                 self.raw = self.run_projection(p, self.gen_policy(p))
 
-                logger.info('Set i_day = %s', i_day)
+                if VERBOSE: logger.info('Set i_day = %s', i_day)
             else:
                 projections = {}
                 best_i_day = -1
@@ -94,7 +96,7 @@ class Sir:
 
                 self.i_day = best_i_day
 
-            logger.info(
+            if VERBOSE: logger.info(
                 'Estimated date_first_hospitalized: %s; current_date: %s; i_day: %s',
                 p.current_date - timedelta(days=self.i_day),
                 p.current_date,
@@ -104,7 +106,7 @@ class Sir:
             # Fitting spread parameter to observed hospital census (dates of 1 patient and today)
             self.i_day = (p.current_date - p.date_first_hospitalized).days
             self.current_hospitalized = p.current_hospitalized
-            logger.info(
+            if VERBOSE: logger.info(
                 'Using date_first_hospitalized: %s; current_date: %s; i_day: %s, current_hospitalized: %s',
                 p.date_first_hospitalized,
                 p.current_date,
@@ -123,7 +125,7 @@ class Sir:
 
             p.doubling_time = dts[min_loss]
 
-            logger.info('Estimated doubling_time: %s', p.doubling_time)
+            if VERBOSE: logger.info('Estimated doubling_time: %s', p.doubling_time)
             intrinsic_growth_rate = get_growth_rate(p.doubling_time)
             self.beta = get_beta(intrinsic_growth_rate, self.gamma, self.susceptible, 0.0)
             self.beta_t = get_beta(intrinsic_growth_rate, self.gamma, self.susceptible, p.relative_contact_rate)
@@ -163,8 +165,8 @@ class Sir:
             'census_ventilated': self.raw['census_ventilated'],
         })
 
-        logger.info('len(np.arange(-i_day, n_days+1)): %s', len(np.arange(-self.i_day, p.n_days+1)))
-        logger.info('len(raw_df): %s', len(self.raw_df))
+        if VERBOSE: logger.info('len(np.arange(-i_day, n_days+1)): %s', len(np.arange(-self.i_day, p.n_days+1)))
+        if VERBOSE: logger.info('len(raw_df): %s', len(self.raw_df))
 
         self.infected = self.raw_df['infected'].values[self.i_day]
         self.susceptible = self.raw_df['susceptible'].values[self.i_day]
