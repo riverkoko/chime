@@ -39,6 +39,8 @@ PDF_ANNOTATIONS = './parameters/notes/'
 PDF_ACTUALS = './parameters/actuals/'
 # PDF_ASSETS = './assets/'
 
+SHOW_COMPUTED = False
+
 
 def format_parameter(pv):
 
@@ -152,14 +154,15 @@ def smoothed_line(x, y):
 def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
 
     # print ("current scenario: ", current_scenario )
-    # print( model_name )
-    # print( cd )
-    # print( sp )
-    # print( data )
+    # print( "model_name", model_name )
+    # print( "cd", cd )
+    # print( "sp", sp )
+    # print( "data", data )
 
-    rf = data[data['Location'] == sp['Location Code'][current_scenario]]
+    scenario_location = sp.loc[current_scenario]["Scenario ID"]
+    print ("scenario_location: ", scenario_location )
 
-    # print(data)
+    rf = data[data['Location'] == scenario_location]
 
     rf = rf[["date"
         , "census-hosp dt-{m} sd-norm".format(m=model_name)
@@ -314,7 +317,7 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
 
     return param
 
-def generate_pdf(pdf_file, data, computed_data, scenario_parameters ):
+def generate_pdf(pdf_file, projected_data, computed_data, scenario_parameters ):
     pdfmetrics.registerFont(TTFont('Calibri', 'Calibri.ttf'))
     pdfmetrics.registerFont(TTFont('CalibriBd', 'Calibri Bold.ttf'))
     pdfmetrics.registerFont(TTFont('CalibriIt', 'Calibri Italic.ttf'))
@@ -335,7 +338,7 @@ def generate_pdf(pdf_file, data, computed_data, scenario_parameters ):
     doc.title="COVID19 Scenario Projections"
     doc.subject="COVID19"
     doc.scenario_parameters = scenario_parameters
-    doc.data = data
+    doc.data = projected_data
     doc.computed_data = computed_data
     doc.current_scenario = 0
 
@@ -390,7 +393,7 @@ def generate_pdf(pdf_file, data, computed_data, scenario_parameters ):
 
         for model in ( "low", 'high' ):
             elements.append(scenario_header(params=get_computed_data_for_header(current_scenario_id, model, computed_data, scenario_parameters)))
-            elements.append(scenario_graph(params=get_computed_data_for_graph(current_scenario_id, model, computed_data, scenario_parameters, data)))
+            elements.append(scenario_graph(params=get_computed_data_for_graph(current_scenario_id, model, computed_data, scenario_parameters, projected_data)))
             elements.append(Spacer(0, 0.125*inch ))
 
         p = scenario_parameters.loc[scenario_parameters['Scenario ID'] == scenario].transpose()
@@ -450,19 +453,21 @@ def generate_pdf(pdf_file, data, computed_data, scenario_parameters ):
             t.setStyle(TableStyle([
                 ('LINEBELOW', (0,0), (0,0), 0.5, HexColor("#a2b7e0")),
 
-                # ('BOX', (0,0), (-1,-1), 0.25, colors.black),
-
                 ('FONT', (0,0), (0,0), "CalibriBd", 8 ),
                 ('FONT', (1,0), (-1,-1), "Calibri", 6 ),
 
-                # ('TOPPADDING', (0, 0), (-1,-1), 1),
-                # ('BOTTOMPADDING', (0, 0), (-1,-1), 1),
             ]))
 
             elements.append(t)
 
-        # for line in range(450):
-        #   elements.append(Paragraph(scenario, normal))
+        if SHOW_COMPUTED:
+            elements.append(PageBreak())
+
+            for model in ( "computed", 'observed' ):
+                elements.append(scenario_header(params=get_computed_data_for_header(current_scenario_id, model, computed_data, scenario_parameters)))
+                elements.append(scenario_graph(params=get_computed_data_for_graph(current_scenario_id, model, computed_data, scenario_parameters, projected_data)))
+                elements.append(Spacer(0, 0.125*inch ))
+
         current_scenario_id += 1
 
 

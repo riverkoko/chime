@@ -376,6 +376,8 @@ def main():
         df.to_csv(name, index=False)
 
     if a.generate_pdf >= 2 :
+        head.reset_index(drop=True, inplace=True)
+        computed_data.reset_index(drop=True, inplace=True)
         pdf_file = cenv.output_dir + "/chime-report.pdf"
         generate_pdf(pdf_file, data, computed_data, head )
         if OPEN_PDF: os.system("open " + pdf_file)
