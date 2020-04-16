@@ -313,7 +313,14 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
         )
     } )
 
-    # print (param['capacity'])
+    param.update( { 'beds' : (
+
+        sp['MedSurg Capacity'][current_scenario],
+        sp['ICU Capacity'][current_scenario],
+        sp['Ventilator Capacity'][current_scenario],
+
+            )
+        })
 
     return param
 

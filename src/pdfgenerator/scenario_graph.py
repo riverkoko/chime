@@ -249,25 +249,41 @@ class scenario_graph(Flowable):
         leftm = (2.67 * 3 - 1) # aligning with the header
         gap = 0.06
         vp  = 0.25
-        col = 0.75
+        col = (3 / 5)
 
-        d.add(Rect(*self.coord(leftm, 1-vp, inch), 3 * inch, inch, strokeColor="#ffffff", fillColor="#ffffff", strokeWidth=1.0 ))
+        has_medsurg = (self.params['beds'][0] > 0)
+        has_icu     = (self.params['beds'][1] > 0)
+        has_vent    = (self.params['beds'][2] > 0)
+
+        ladj = 0
+        if not has_medsurg: ladj += col
+        if not has_icu: ladj += col
+        if not has_vent: ladj += col
+
+        d.add(Rect(*self.coord(leftm, 0.5-vp, inch), 3 * inch, 0.5*inch, strokeColor="#ffffff", fillColor="#ffffff", strokeWidth=1.0 ))
 
         d.add(Rect(*self.coord(leftm, vp, inch), 3 * inch, 0.25*inch, strokeColor="#7e7f7f", fillColor="#eeeeee", strokeWidth=0.25 ))
         d.add(Line(*self.vlinecoord( leftm + 1, vp - 0.25, 0.25, inch), strokeColor="#7e7f7f", strokeWidth=0.25 ))
         d.add(Line(*self.vlinecoord( leftm + 2, vp - 0.25, 0.25, inch), strokeColor="#7e7f7f", strokeWidth=0.25 ))
         d.add(Line(*self.hlinecoord(leftm, 0, 3, inch), strokeColor="#a2b7e0", strokeWidth=0.5 ))
 
+        vp += 0.25
+        d.add(Rect(*self.coord(leftm + ladj, vp, inch), (3 - ladj) * inch, 0.25*inch - 2, strokeColor="#ffffff", fillColor="#ffffff", strokeWidth=0.1 ))
+        d.add(Rect(*self.coord(leftm + ladj, vp + 0.75, inch), (3 - ladj) * inch, 0.75*inch, strokeColor="#7e7f7f", fillColor="#eeeeee", strokeWidth=0.25 ))
+        for r in range(2):
+            d.add(Line(*self.hlinecoord(leftm + ladj, (vp + 0.25) + r*0.25, (3 - ladj), inch), strokeColor="#7e7f7f", strokeWidth=0.25 ))
 
-        vp += 0.5
-        for r in range(3):
-            vp += 0.25
-            d.add(Rect(*self.coord(leftm, vp, inch), 3 * inch, 0.25*inch, strokeColor="#7e7f7f", fillColor="#eeeeee", strokeWidth=0.25 ))
-            for vl in range(3):
-                d.add(Line(*self.vlinecoord( leftm + (vl + 1)*col, vp - 0.25, 0.25, inch), strokeColor="#7e7f7f", strokeWidth=0.25 ))
+        cc = 1
+        for include in ( True, has_medsurg, has_icu, has_vent ):
+            if include:
+                d.add(Line(*self.vlinecoord( leftm + ladj + cc * col, vp, 0.75, inch), strokeColor="#7e7f7f", strokeWidth=0.25 ))
+                cc += 1
+        # for r in range(3):
+        #     vp += 0.25
+        #     for vl in range(1, int(6 - (ladj//col) )):
+        #
 
-        d.add(Line(*self.hlinecoord(leftm, vp - 0.75, 3, inch), strokeColor="#a2b7e0", strokeWidth=0.5 ))
-
+        d.add(Line(*self.hlinecoord(leftm + ladj, vp, (3 - ladj), inch), strokeColor="#a2b7e0", strokeWidth=0.5 ))
 
         self.canv.restoreState()
 
@@ -302,6 +318,9 @@ class scenario_graph(Flowable):
         d2.add(p)
         d2.drawOn(self.canv, 0, 0)
 
+        #
+        # add table for hospitalized patients
+        #
         for hdr, pos in (('Currently Hospitalized COVID-19 Patients', leftm),
             ('Inpatient Precautionary Patients', leftm + 1 ),
             ('Inpatient Positive', leftm + 2 ),
@@ -319,26 +338,34 @@ class scenario_graph(Flowable):
             p.wrapOn(self.canv, 0.75*inch, self.height*2)
             p.drawOn(self.canv, *self.coord(pos + 0.125, vp - 0.28, inch))
 
-        vp = 1
-        for hdr, pos in (
-            ("Social Contact Reduction", leftm ),
-            ("Days to Peak", leftm + col*1 ),
-            ("Days to MedSurg Capacity", leftm + col*2 ),
-            ("Days to ICU Capacity", leftm + col*3 ),
-            ) :
-            p = Paragraph(hdr, style=self.styles["box_header"])
-            p.wrapOn(self.canv, 0.65*inch, self.height*2)
-            p.drawOn(self.canv, *self.coord(pos + (col-0.65)/2 , vp - 0.28, inch))
 
-        vp = 1
+        # Social contact reduction table with days to peak / days to capacity
+        vp = 0.75
+        cc = 0
+        for hdr, include in (
+            ("Social Contact Reduction", True ),
+            ("Days to Peak", True ),
+            ("Days to MedSurg Capacity", has_medsurg ),
+            ("Days to ICU Capacity", has_icu ),
+            ("Days to Ventilator Capacity", has_vent ),
+            ) :
+            if include:
+                pos = leftm + ladj + (col * cc) + ( 0.05 * col )
+                p = Paragraph(hdr, style=self.styles["box_header"])
+                p.wrapOn(self.canv, col*inch*.9, self.height*2)
+                p.drawOn(self.canv, *self.coord(pos, vp - 0.28, inch))
+                cc += 1
+
+
+        vp = 0.75
         for hdr, pos in (
             ("{:,.0f}%".format(self.params['sd'][0][0]*100), 0 ),
             ("{:,.0f}%".format(self.params['sd'][1][0]*100), 0.25 ),
             ("{:,.0f}%".format(self.params['sd'][2][0]*100), 0.5 ),
             ) :
             p = Paragraph(hdr, style=self.styles["box_result"])
-            p.wrapOn(self.canv, 0.75*inch, self.height*2)
-            p.drawOn(self.canv, *self.coord(leftm, pos + vp - 0.007, inch))
+            p.wrapOn(self.canv, col*inch, self.height*2)
+            p.drawOn(self.canv, *self.coord(leftm + ladj, pos + vp - 0.007, inch))
 
         pk = [
             self.params['sd'][0][1],
@@ -359,40 +386,63 @@ class scenario_graph(Flowable):
             (pks[2], 0.5  ),
             ) :
             p = Paragraph(hdr, style=self.styles["box_result"])
-            p.wrapOn(self.canv, 0.75*inch, self.height*2)
-            p.drawOn(self.canv, *self.coord(leftm + col, pos + vp - 0.007, inch))
+            p.wrapOn(self.canv, col*inch, self.height*2)
+            p.drawOn(self.canv, *self.coord(leftm + ladj + col, pos + vp - 0.007, inch))
 
-        caps = []
-        for p in (0, 3, 6):
-            if self.params['capacity'][p] is None:
-                caps.append("-")
-            else:
-                caps.append("{:,.0f} ({})".format(self.params['capacity'][p][1], NormalDate(self.params['capacity'][p][0]).formatMS('{DD}-{MMM}')))
+        cc = 0
+        if has_medsurg :
+            caps = []
+            for p in (0, 3, 6):
+                if self.params['capacity'][p] is None:
+                    caps.append("-")
+                else:
+                    caps.append("{:,.0f} ({})".format(self.params['capacity'][p][1], NormalDate(self.params['capacity'][p][0]).formatMS('{DD}-{MMM}')))
 
-        for hdr, pos in (
-            (caps[0], 0    ),
-            (caps[1], 0.25 ),
-            (caps[2], 0.5  ),
-            ) :
-            p = Paragraph(hdr, style=self.styles["box_result"])
-            p.wrapOn(self.canv, 0.75*inch, self.height*2)
-            p.drawOn(self.canv, *self.coord(leftm + col*2, pos + vp - 0.007, inch))
+            for hdr, pos in (
+                (caps[0], 0    ),
+                (caps[1], 0.25 ),
+                (caps[2], 0.5  ),
+                ) :
+                p = Paragraph(hdr, style=self.styles["box_result"])
+                p.wrapOn(self.canv, col*inch, self.height*2)
+                p.drawOn(self.canv, *self.coord(leftm + ladj + col*(cc+2), pos + vp - 0.007, inch))
+            cc += 1
 
-        caps = []
-        for p in (1, 4, 7):
-            if self.params['capacity'][p] is None:
-                caps.append("-")
-            else:
-                caps.append("{:,.0f} ({})".format(self.params['capacity'][p][1], NormalDate(self.params['capacity'][p][0]).formatMS('{DD}-{MMM}')))
+        if has_icu :
+            caps = []
+            for p in (1, 4, 7):
+                if self.params['capacity'][p] is None:
+                    caps.append("-")
+                else:
+                    caps.append("{:,.0f} ({})".format(self.params['capacity'][p][1], NormalDate(self.params['capacity'][p][0]).formatMS('{DD}-{MMM}')))
 
-        for hdr, pos in (
-            (caps[0], 0    ),
-            (caps[1], 0.25 ),
-            (caps[2], 0.5  ),
-            ) :
-            p = Paragraph(hdr, style=self.styles["box_result"])
-            p.wrapOn(self.canv, 0.75*inch, self.height*2)
-            p.drawOn(self.canv, *self.coord(leftm + col*3, pos + vp - 0.007, inch))
+            for hdr, pos in (
+                (caps[0], 0    ),
+                (caps[1], 0.25 ),
+                (caps[2], 0.5  ),
+                ) :
+                p = Paragraph(hdr, style=self.styles["box_result"])
+                p.wrapOn(self.canv, col*inch, self.height*2)
+                p.drawOn(self.canv, *self.coord(leftm + ladj + (col * (2+cc)), pos + vp - 0.007, inch))
+            cc += 1
+
+        if has_vent :
+            caps = []
+            for p in (2, 5, 8):
+                if self.params['capacity'][p] is None:
+                    caps.append("-")
+                else:
+                    caps.append("{:,.0f} ({})".format(self.params['capacity'][p][1], NormalDate(self.params['capacity'][p][0]).formatMS('{DD}-{MMM}')))
+
+            for hdr, pos in (
+                (caps[0], 0    ),
+                (caps[1], 0.25 ),
+                (caps[2], 0.5  ),
+                ) :
+                p = Paragraph(hdr, style=self.styles["box_result"])
+                p.wrapOn(self.canv, col*inch, self.height*2)
+                p.drawOn(self.canv, *self.coord(leftm + ladj + (col * (2+cc)), pos + vp - 0.007, inch))
+            cc += 1
 
 # d = datetime.datetime.strptime(self.params["peaks"][rowNo][0][0], "%Y%m%d")
 # lbl = "{:,.0f} on {}".format(self.params["peaks"][rowNo][0][1], d.strftime("%d-%b"))
