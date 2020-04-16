@@ -115,12 +115,24 @@ class Sir:
             )
 
             # Make an initial coarse estimate
-            dts = np.linspace(1, 15, 15)
+            # dts = np.linspace(1, 15, 15)
+
+# WORKAROUND: if min_loss == 0, the call to dts[min_loss-1] returns the last value [-1] of the array
+#             min_loss seems to be zero when current hospitalizations == 1
+#             Will need to verify that it is not fouling anything up to set to 1
+#             Similar problem on the other side. min_loss >= 14 won't work either
+            linear_space_length = 15
+
+            dts = np.linspace(1, linear_space_length, linear_space_length)
+
             min_loss = self.get_argmin_doubling_time(p, dts)
 
             # Refine the coarse estimate
             for iteration in range(4):
-                dts = np.linspace(dts[min_loss-1], dts[min_loss+1], 15)
+                # keep the model in the array
+                l = max(min_loss - 1, 0)
+                h = min( min_loss + 1, linear_space_length - 1)
+                dts = np.linspace(l, h, linear_space_length)
                 min_loss = self.get_argmin_doubling_time(p, dts)
 
             p.doubling_time = dts[min_loss]
