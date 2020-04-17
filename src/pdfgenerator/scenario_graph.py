@@ -179,15 +179,18 @@ class scenario_graph(Flowable):
         line.yValueAxis.labels.fontName = "Calibri"
         line.yValueAxis.labels.fontSize = 6
         line.yValueAxis.labelTextFormat = "{:,.0f}"
-        line.yValueAxis.valueStep = 100
+
+        ymax = ((self.params["ymax"] + 10) // 10) * 10
+
+        line.yValueAxis.valueMin = 0
+        line.yValueAxis.valueMax = ymax
+        line.yValueAxis.valueStep = ymax // 10
         # line.yValueAxis.dumpProperties()
 
         line.lineLabelFormat = self.label_formatter
         line.lineLabels.fontName = "Calibri"
         line.lineLabels.fontSize = 5
         line.lineLabelNudge = 0.05 * inch
-
-        # print(dir(self.label_formatter))
 
         line_colors = [
                         [ HexColor("#5c9bd5aa", hasAlpha=True), HexColor("#ffbf01aa", hasAlpha=True), HexColor("#c00101aa", hasAlpha=True) ],
@@ -278,10 +281,6 @@ class scenario_graph(Flowable):
             if include:
                 d.add(Line(*self.vlinecoord( leftm + ladj + cc * col, vp, 0.75, inch), strokeColor="#7e7f7f", strokeWidth=0.25 ))
                 cc += 1
-        # for r in range(3):
-        #     vp += 0.25
-        #     for vl in range(1, int(6 - (ladj//col) )):
-        #
 
         d.add(Line(*self.hlinecoord(leftm + ladj, vp, (3 - ladj), inch), strokeColor="#a2b7e0", strokeWidth=0.5 ))
 
@@ -312,8 +311,6 @@ class scenario_graph(Flowable):
         p.fillColor = HexColor("#c00101")
         p.strokeColor = HexColor("#ffffff")
         p.strokeWidth = 0.01
-
-        # p.dumpProperties()
 
         d2.add(p)
         d2.drawOn(self.canv, 0, 0)

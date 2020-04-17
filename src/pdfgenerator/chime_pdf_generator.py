@@ -160,7 +160,6 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
     # print( "data", data )
 
     scenario_location = sp.loc[current_scenario]["Scenario ID"]
-    print ("scenario_location: ", scenario_location )
 
     rf = data[data['Location'] == scenario_location]
 
@@ -296,6 +295,28 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
         ( sp['Social Distancing Reduction Rate (1): 0.0 - 1.0'][current_scenario], pk[2] ),
         )
     } )
+
+    print (cf[["census-hosp-sd-norm"]]["census-hosp-sd-norm"].max())
+    pk = [
+        cf[["census-hosp-sd-norm"]]["census-hosp-sd-norm"].max(),
+        cf[["census-hosp-sd-0"]]["census-hosp-sd-0"].max(),
+        cf[["census-hosp-sd-1"]]["census-hosp-sd-1"].max(),
+
+        cf[["census-icu-sd-norm"]]["census-icu-sd-norm"].max(),
+        cf[["census-icu-sd-0"]]["census-icu-sd-0"].max(),
+        cf[["census-icu-sd-1"]]["census-icu-sd-1"].max(),
+
+        cf[["census-vent-sd-norm"]]["census-vent-sd-norm"].max(),
+        cf[["census-vent-sd-0"]]["census-vent-sd-0"].max(),
+        cf[["census-vent-sd-1"]]["census-vent-sd-1"].max(),
+
+        sp.loc[current_scenario]["MedSurg Capacity"],
+        sp.loc[current_scenario]["ICU Capacity"],
+        sp.loc[current_scenario]["Ventilator Capacity"],
+
+    ]
+
+    param.update( { 'ymax' : np.max( pk ) })
 
     param.update( { 'capacity' : (
         next(iter(cf[["date", "day"]][cf[["date", "census-hosp-sd-norm", "day"]]["census-hosp-sd-norm"] >= cf['hosp-beds']].values.tolist()), None),
