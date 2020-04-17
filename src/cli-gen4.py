@@ -166,7 +166,7 @@ def main():
         fncdata = cenv.output_dir + "/chime-computed-data-" + a.scenario_id + ".csv"
         fnhead  = cenv.output_dir + "/chime-parameters-" + a.scenario_id + ".csv"
 
-        doubling_rates = [ [a.doubling_time_low, "dt-low"], [a.doubling_time_high, "dt-high"], [a.doubling_time_observed, "dt-observed"], [ None, "dt-computed"]]
+        doubling_rates = [ [a.doubling_time_low, "dt-low"], [a.doubling_time_high, "dt-high"], [a.doubling_time_observed, "dt-observed"]] #, [ None, "dt-computed"]]
         contact_rates = [ [a.relative_contact_rate, "sd-norm"], [a.relative_contact_rate_0, "sd-0"], [a.relative_contact_rate_1, "sd-1"] ]
 
         m = []
@@ -177,12 +177,12 @@ def main():
             for r in ( contact_rates ) :
 
                 p.relative_contact_rate = r[0]
-                if d[0] is None :
-                    p.doubling_time = None
-                    p.date_first_hospitalized = a.date_first_hospitalized
-                else :
-                    p.doubling_time = d[0]
-                    p.date_first_hospitalized = None
+                # if d[0] is None :
+                #     p.doubling_time = None
+                #     p.date_first_hospitalized = a.date_first_hospitalized
+                # else :
+                p.doubling_time = d[0]
+                p.date_first_hospitalized = None
 
                 if p.doubling_time is None and p.date_first_hospitalized is None:
                     p.doubling_time = doubling_rates[2][0]
@@ -321,15 +321,16 @@ def main():
                 'db dt-observed sd-0'    : [ m[2][1].doubling_time_t ],
                 'db dt-observed sd-1'    : [ m[2][2].doubling_time_t ],
 
-                'r0 dt-computed sd-norm' : [ m[3][0].r_naught ],
-                'r0 dt-computed sd-0'    : [ m[3][1].r_naught ],
-                'r0 dt-computed sd-1'    : [ m[3][2].r_naught ],
-                'rt dt-computed sd-norm' : [ m[3][0].r_t ],
-                'rt dt-computed sd-0'    : [ m[3][1].r_t ],
-                'rt dt-computed sd-1'    : [ m[3][2].r_t ],
-                'db dt-computed sd-norm' : [ m[3][0].doubling_time_t ],
-                'db dt-computed sd-0'    : [ m[3][1].doubling_time_t ],
-                'db dt-computed sd-1'    : [ m[3][2].doubling_time_t ] }
+                # 'r0 dt-computed sd-norm' : [ m[3][0].r_naught ],
+                # 'r0 dt-computed sd-0'    : [ m[3][1].r_naught ],
+                # 'r0 dt-computed sd-1'    : [ m[3][2].r_naught ],
+                # 'rt dt-computed sd-norm' : [ m[3][0].r_t ],
+                # 'rt dt-computed sd-0'    : [ m[3][1].r_t ],
+                # 'rt dt-computed sd-1'    : [ m[3][2].r_t ],
+                # 'db dt-computed sd-norm' : [ m[3][0].doubling_time_t ],
+                # 'db dt-computed sd-0'    : [ m[3][1].doubling_time_t ],
+                # 'db dt-computed sd-1'    : [ m[3][2].doubling_time_t ]
+                }
 
         if a.data_key is not None:
             cdata.update({ 'Data Key': [ a.data_key ], })
