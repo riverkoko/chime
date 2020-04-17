@@ -419,7 +419,7 @@ def generate_pdf(pdf_file, projected_data, computed_data, scenario_parameters ):
         elements.append(Spacer(0, 0.125*inch ))
         elements.append(PageBreak())
 
-        for model in ( "low", 'high' ):
+        for model in ( "low", 'observed' ):
             elements.append(scenario_header(params=get_computed_data_for_header(current_scenario_id, model, computed_data, scenario_parameters)))
             elements.append(scenario_graph(params=get_computed_data_for_graph(current_scenario_id, model, computed_data, scenario_parameters, projected_data)))
             elements.append(Spacer(0, 0.125*inch ))
@@ -488,13 +488,13 @@ def generate_pdf(pdf_file, projected_data, computed_data, scenario_parameters ):
 
             elements.append(t)
 
-        if SHOW_COMPUTED:
-            elements.append(PageBreak())
-
-            for model in ( "computed", 'observed' ):
-                elements.append(scenario_header(params=get_computed_data_for_header(current_scenario_id, model, computed_data, scenario_parameters)))
-                elements.append(scenario_graph(params=get_computed_data_for_graph(current_scenario_id, model, computed_data, scenario_parameters, projected_data)))
-                elements.append(Spacer(0, 0.125*inch ))
+        # if SHOW_COMPUTED:
+        #     elements.append(PageBreak())
+        #
+        #     for model in ( 'observed' ):
+        #         elements.append(scenario_header(params=get_computed_data_for_header(current_scenario_id, model, computed_data, scenario_parameters)))
+        #         elements.append(scenario_graph(params=get_computed_data_for_graph(current_scenario_id, model, computed_data, scenario_parameters, projected_data)))
+        #         elements.append(Spacer(0, 0.125*inch ))
 
         current_scenario_id += 1
 
