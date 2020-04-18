@@ -149,7 +149,7 @@ HELP = {
     "icu_days": "Average days in ICU",
     "icu_rate": "ICU rate: 0.0 - 1.0",
     "infectious_days": "Infectious days",
-    "mitigation_date": "Date on which social distancing measures too effect",
+    "mitigation_date": "Date on which social distancing measures took effect",
     "market_share": "Hospital market share (0.00001 - 1.0)",
     "max_y_axis": "Max y-axis",
     "n_days": "Number of days to project >= 0",
@@ -389,6 +389,7 @@ class Parameters:
         self.market_share = None
         self.max_y_axis = None
         self.mitigation_date = None
+        self.mitigation_model = None
         self.n_days = None
         self.population = None
         self.region = None
