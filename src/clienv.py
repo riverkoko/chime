@@ -10,6 +10,8 @@ ALT_OUTPUT_DIR = "./output"
 
 PARAMETERS_FILE = ALT_PARAMETERS_FILE = "./parameters/params.txt"
 
+SD_MODEL_DIR = './parameters/sd'
+
 class ChimeCLIEnvironment :
     """Arbitrary regions to sum population."""
 
@@ -22,6 +24,11 @@ class ChimeCLIEnvironment :
             self.output_dir = ALT_OUTPUT_DIR
             self.parameters_file = ALT_PARAMETERS_FILE
             os.chdir(ALT_PROCESSING_DIR)
+
+        if not os.path.exists(SD_MODEL_DIR):
+            os.mkdir(SD_MODEL_DIR)
+
+        self.sd_model_dir = SD_MODEL_DIR + "/"
 
         tz_NY = pytz.timezone('America/New_York')
         t = datetime.now(tz_NY).strftime("/%Y%m%d-%H%M%S")
