@@ -2,7 +2,10 @@ version: '3.1'
 
 services:
   app:
+    container_name: chime_app
     build: .
     restart: always
     ports:
       - "${PORT}:8000"
+    volumes:
+      - ./output:/app/cache
