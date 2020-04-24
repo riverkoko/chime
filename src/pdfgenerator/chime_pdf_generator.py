@@ -14,9 +14,9 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib import colors
 
-from pdfgenerator.scenario_header import scenario_header
-from pdfgenerator.scenario_graph import scenario_graph
-from pdfgenerator.scenario_parameter_table import scenario_parameter_table
+from pdfgenerator.ScenarioHeader import ScenarioHeader, ScenarioInflectedHeader
+from pdfgenerator.ScenarioGraph import ScenarioGraph, ScenarioInflectedGraph
+# from pdfgenerator.ScenarioParameterTable import ScenarioParameterTable
 from reportlab.lib.colors import HexColor
 
 from penn_chime.constants import VERSION
@@ -41,7 +41,6 @@ PDF_ACTUALS = './parameters/actuals/'
 
 SHOW_COMPUTED = False
 
-
 def format_parameter(pv):
 
     t = str(type(pv))
@@ -59,22 +58,27 @@ def format_parameter(pv):
         v = "None"
 
     return v
-
-
 def max_peak( p, n_days ) :
-    if p >= n_days : return None
+    if p >= n_days or p <= 0 : return None
     return p
-
 def excel_date(date1):
     temp = datetime(1899, 12, 30)    # Note, not 31st Dec but 30th!
     delta = date1 - temp
     # return float(delta.days) + (float(delta.seconds) / 86400)
     return int(delta.days)
-
 def excel_to_normaldate( d ):
     return datetime(1899, 12, 30) + timedelta(days=d)
+def smoothed_line(x, y):
 
-class current_scenario(ActionFlowable):
+    w = np.isnan(y)
+    y[w] = 0.
+
+    spl = UnivariateSpline(x, y)
+    spl.set_smoothing_factor(15.0)
+
+    return spl(x)
+
+class CurrentScenario(ActionFlowable):
     """
     A Custom Line Flowable
     """
@@ -94,10 +98,7 @@ class current_scenario(ActionFlowable):
     def identity(self, maxLen=None):
         return "current_scenario: %s%s" % (str(self.current_scenario),self._frameName())
 
-def get_computed_data_for_header(current_scenario, model_name, cd, sp) :
-    # print( model_name )
-    # print( cd )
-    # print( sp )
+def get_header_parameters(current_scenario, model_name, cd, sp) :
 
     param = {
         # 'dbltime'  : sp['Doubling Time (' + model_name + ')'][current_scenario] ,
@@ -136,29 +137,9 @@ def get_computed_data_for_header(current_scenario, model_name, cd, sp) :
     else:
         param.update( { 'scenario' : 'Not supported' } )
 
-    # print (param)
 
     return param
-
-def smoothed_line(x, y):
-
-    w = np.isnan(y)
-    y[w] = 0.
-
-    spl = UnivariateSpline(x, y)
-    spl.set_smoothing_factor(15.0)
-
-    return spl(x)
-
-
-def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
-
-    # print ("current scenario: ", current_scenario )
-    # print( "model_name", model_name )
-    # print( "cd", cd )
-    # print( "sp", sp )
-    # print( "data", data )
-
+def get_graph_parameters(current_scenario, model_name, cd, sp, data) :
     scenario_location = sp.loc[current_scenario]["Scenario ID"]
 
     rf = data[data['Location'] == scenario_location]
@@ -202,15 +183,6 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
         }, inplace = True
     )
 
-    # print (rf)
-    # hehe!
-    # from scipy import misc
-    # import matplotlib.pyplot as plt
-    #
-    # face = misc.face()
-    # plt.imshow(face)
-    # plt.show()
-
     rf['date'] = rf['date'].apply( lambda a : excel_date(a))
 
     x = rf["date"].values
@@ -237,7 +209,6 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
 
     for col in ( 'hosp-beds', 'icu-beds', 'vent-beds', 'hosp-occ', 'icu-occ', 'vent-occ'):
         cf[col] = rf[col]
-    # print(cf)
 
     param = {
         'labeled-dates': cf[["date"]].iloc[::7, :].values.tolist(),
@@ -258,13 +229,10 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
         'vent-occ'     : cf[["date", "vent-occ"]].values.tolist(),
     }
 
-    # print (param)
-
     param.update( { 'current-inpatient' : (
         sp['Currently Hospitalized COVID-19 Patients (>= 0)'][current_scenario],
         sp['Currently Precautionary Hospitalized Patients (>= 0)'][current_scenario],
-        )
-    } )
+        )  } )
 
     param.update( { 'peaks' : (
         cf[["date", "census-hosp-sd-norm", "day"]][cf[["date", "census-hosp-sd-norm", "day"]]["census-hosp-sd-norm"] == cf[["date", "census-hosp-sd-norm", "day"]]["census-hosp-sd-norm"].max()].values.tolist(),
@@ -279,10 +247,10 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
         cf[["date", "census-icu-sd-1" , "day"]][cf[["date", "census-icu-sd-1" , "day"]]["census-icu-sd-1"]  == cf[["date", "census-icu-sd-1" , "day"]]["census-icu-sd-1"].max()].values.tolist(),
         cf[["date", "census-vent-sd-1", "day"]][cf[["date", "census-vent-sd-1", "day"]]["census-vent-sd-1"] == cf[["date", "census-vent-sd-1", "day"]]["census-vent-sd-1"].max()].values.tolist(),
 
-        )
-    } )
+        ) } )
 
     n_days = sp['Days to Project'][current_scenario]
+
     pk = [
         max_peak( param['peaks'][0][0][2], n_days),
         max_peak( param['peaks'][3][0][2], n_days),
@@ -293,10 +261,8 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
         ( sp['Social Distancing Reduction Rate: 0.0 - 1.0'][current_scenario]    , pk[0] ),
         ( sp['Social Distancing Reduction Rate (0): 0.0 - 1.0'][current_scenario], pk[1] ),
         ( sp['Social Distancing Reduction Rate (1): 0.0 - 1.0'][current_scenario], pk[2] ),
-        )
-    } )
+        ) } )
 
-    print (cf[["census-hosp-sd-norm"]]["census-hosp-sd-norm"].max())
     pk = [
         cf[["census-hosp-sd-norm"]]["census-hosp-sd-norm"].max(),
         cf[["census-hosp-sd-0"]]["census-hosp-sd-0"].max(),
@@ -331,6 +297,119 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
         next(iter(cf[["date", "day"]][cf[["date", "census-icu-sd-1" , "day"]]["census-icu-sd-1"]  >= cf["icu-beds"]].values.tolist()), None),
         next(iter(cf[["date", "day"]][cf[["date", "census-vent-sd-1", "day"]]["census-vent-sd-1"] >= cf["vent-beds"]].values.tolist()), None),
 
+        ) } )
+
+    param.update( { 'beds' : (
+        sp['MedSurg Capacity'][current_scenario],
+        sp['ICU Capacity'][current_scenario],
+        sp['Ventilator Capacity'][current_scenario], ) })
+
+    return param
+
+def get_inflected_graph_parameters(current_scenario, model_name, sp, data, mitigations ) :
+
+    scenario_location = sp.loc[current_scenario]["Scenario ID"]
+
+    rf = data[data['Location'] == scenario_location]
+
+    model_cols = [col for col in rf.columns if 'dt-{m}'.format(m=model_name) in col and "inflected" in col and "census" in col]
+    model_cols.append( "MedSurg Capacity" )
+    model_cols.append( "ICU Capacity")
+    model_cols.append( "Ventilators")
+    model_cols.append( "Non-COVID19 MedSurg Occupancy")
+    model_cols.append( "Non-COVID19 ICU Occupancy")
+    model_cols.append( "Non-COVID19 Ventilators in Use")
+    model_cols.append( 'day' )
+    model_cols.insert( 0, 'date' )
+
+    rf = rf[model_cols]
+
+    rf.rename (
+        columns = {
+        "census-hosp dt-{m} sd-inflected".format(m=model_name)      : 'census-hosp-sd',
+        "census-icu dt-{m} sd-inflected".format(m=model_name)       : 'census-icu-sd',
+        "census-vent dt-{m} sd-inflected".format(m=model_name)      : 'census-vent-sd',
+        "MedSurg Capacity"                                 : "hosp-beds",
+        "ICU Capacity"                                     : "icu-beds",
+        "Ventilators"                                      : "vent-beds",
+        "Non-COVID19 MedSurg Occupancy"                    : "hosp-occ",
+        "Non-COVID19 ICU Occupancy"                        : "icu-occ",
+        "Non-COVID19 Ventilators in Use"                   : "vent-occ",
+        }, inplace = True
+    )
+
+    rf['date'] = rf['date'].apply( lambda a : excel_date(a))
+
+    x = rf["date"].values
+
+    cf = DataFrame()
+
+    cf["date"] = x
+    cf["day"] = rf["day"]
+    for col in [
+        "census-hosp-sd",
+        "census-icu-sd",
+        "census-vent-sd",
+        ]:
+        cf[col] = smoothed_line(x, rf[col].values)
+
+    cf['date'] = cf['date'].apply( lambda a : excel_to_normaldate(a).strftime("%Y%m%d"))
+
+    for col in ( 'hosp-beds', 'icu-beds', 'vent-beds', 'hosp-occ', 'icu-occ', 'vent-occ'):
+        cf[col] = rf[col]
+
+    param = {
+        'labeled-dates': cf[["date"]].iloc[::7, :].values.tolist(),
+        'hosp-sd'      : cf[["date", "census-hosp-sd"]].values.tolist(),
+        'icu-sd'       : cf[["date", "census-icu-sd"]].values.tolist(),
+        'vent-sd'      : cf[["date", "census-vent-sd"]].values.tolist(),
+        'hosp-beds'    : cf[["date", "hosp-beds"]].values.tolist(),
+        'icu-beds'     : cf[["date", "icu-beds"]].values.tolist(),
+        'vent-beds'    : cf[["date", "vent-beds"]].values.tolist(),
+        'hosp-occ'     : cf[["date", "hosp-occ"]].values.tolist(),
+        'icu-occ'      : cf[["date", "icu-occ"]].values.tolist(),
+        'vent-occ'     : cf[["date", "vent-occ"]].values.tolist(),
+    }
+
+    param.update( { 'current-inpatient' : (
+        sp['Currently Hospitalized COVID-19 Patients (>= 0)'][current_scenario],
+        sp['Currently Precautionary Hospitalized Patients (>= 0)'][current_scenario],
+        )
+    } )
+
+    param.update( { 'peaks' : (
+        cf[["date", "census-hosp-sd", "day"]][cf[["date", "census-hosp-sd", "day"]]["census-hosp-sd"] == cf[["date", "census-hosp-sd", "day"]]["census-hosp-sd"].max()].values.tolist(),
+        cf[["date", "census-icu-sd" , "day"]][cf[["date", "census-icu-sd" , "day"]]["census-icu-sd"]  == cf[["date", "census-icu-sd" , "day"]]["census-icu-sd"].max()].values.tolist(),
+        cf[["date", "census-vent-sd", "day"]][cf[["date", "census-vent-sd", "day"]]["census-vent-sd"] == cf[["date", "census-vent-sd", "day"]]["census-vent-sd"].max()].values.tolist(),
+        )
+    } )
+
+    n_days = sp['Days to Project'][current_scenario]
+    pk = [
+        max_peak( param['peaks'][0][0][2], n_days),
+        max_peak( param['peaks'][1][0][2], n_days),
+        max_peak( param['peaks'][2][0][2], n_days),
+    ]
+    print(pk)
+
+    param.update( { 'peak-day' : pk } )
+
+    pk = [
+        cf[["census-hosp-sd"]]["census-hosp-sd"].max(),
+        cf[["census-icu-sd"]]["census-icu-sd"].max(),
+        cf[["census-vent-sd"]]["census-vent-sd"].max(),
+
+        sp.loc[current_scenario]["MedSurg Capacity"],
+        sp.loc[current_scenario]["ICU Capacity"],
+        sp.loc[current_scenario]["Ventilator Capacity"],
+    ]
+
+    param.update( { 'ymax' : np.max( pk ) })
+
+    param.update( { 'capacity' : (
+        next(iter(cf[["date", "day"]][cf[["date", "census-hosp-sd", "day"]]["census-hosp-sd"] >= cf["hosp-beds"]].values.tolist()), None),
+        next(iter(cf[["date", "day"]][cf[["date", "census-icu-sd" , "day"]]["census-icu-sd"]  >= cf["icu-beds"]].values.tolist()), None),
+        next(iter(cf[["date", "day"]][cf[["date", "census-vent-sd", "day"]]["census-vent-sd"] >= cf["vent-beds"]].values.tolist()), None),
         )
     } )
 
@@ -343,9 +422,11 @@ def get_computed_data_for_graph(current_scenario, model_name, cd, sp, data) :
             )
         })
 
+    param.update( { 'mitigations' : mitigations })
+
     return param
 
-def generate_pdf(pdf_file, projected_data, computed_data, scenario_parameters ):
+def generate_pdf(pdf_file, projected_data, computed_data, scenario_parameters, mitigations, mitigation_data ):
     pdfmetrics.registerFont(TTFont('Calibri', 'Calibri.ttf'))
     pdfmetrics.registerFont(TTFont('CalibriBd', 'Calibri Bold.ttf'))
     pdfmetrics.registerFont(TTFont('CalibriIt', 'Calibri Italic.ttf'))
@@ -415,13 +496,13 @@ def generate_pdf(pdf_file, projected_data, computed_data, scenario_parameters ):
 
     current_scenario_id = 0
     for scenario in ( scenario_parameters["Scenario ID"].unique() ):
-        elements.append(current_scenario(current_scenario_id))
+        elements.append(CurrentScenario(current_scenario_id))
         elements.append(Spacer(0, 0.125*inch ))
         elements.append(PageBreak())
 
         for model in ( "low", 'observed' ):
-            elements.append(scenario_header(params=get_computed_data_for_header(current_scenario_id, model, computed_data, scenario_parameters)))
-            elements.append(scenario_graph(params=get_computed_data_for_graph(current_scenario_id, model, computed_data, scenario_parameters, projected_data)))
+            elements.append(ScenarioHeader(params=get_header_parameters(current_scenario_id, model, computed_data, scenario_parameters)))
+            elements.append(ScenarioGraph(params=get_graph_parameters(current_scenario_id, model, computed_data, scenario_parameters, projected_data)))
             elements.append(Spacer(0, 0.125*inch ))
 
         p = scenario_parameters.loc[scenario_parameters['Scenario ID'] == scenario].transpose()
@@ -433,7 +514,6 @@ def generate_pdf(pdf_file, projected_data, computed_data, scenario_parameters ):
         ]
 
         for pi in range( 0, len(p), 3):
-            # print (pi)
             r = [p[pi], format_parameter(pv[pi][0]), " ",]
             if pi + 1 < len(p):
                 r.append(p[pi+1])
@@ -488,13 +568,14 @@ def generate_pdf(pdf_file, projected_data, computed_data, scenario_parameters ):
 
             elements.append(t)
 
-        # if SHOW_COMPUTED:
-        #     elements.append(PageBreak())
-        #
-        #     for model in ( 'observed' ):
-        #         elements.append(scenario_header(params=get_computed_data_for_header(current_scenario_id, model, computed_data, scenario_parameters)))
-        #         elements.append(scenario_graph(params=get_computed_data_for_graph(current_scenario_id, model, computed_data, scenario_parameters, projected_data)))
-        #         elements.append(Spacer(0, 0.125*inch ))
+        if len(mitigations.columns) >0 :
+
+            miti = mitigations[mitigations['init-model'] == 'dt-low']
+            if len(miti.index) > 0 :
+                elements.append(PageBreak())
+                elements.append(ScenarioInflectedHeader(params=get_header_parameters(current_scenario_id, "observed",  computed_data, scenario_parameters)))
+                elements.append(ScenarioInflectedGraph(params=get_inflected_graph_parameters(current_scenario_id, "observed", scenario_parameters, mitigation_data, miti)))
+                elements.append(Spacer(0, 0.125*inch ))
 
         current_scenario_id += 1
 

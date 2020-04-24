@@ -15,7 +15,7 @@ from reportlab.lib.validators import Auto
 from reportlab.lib.normalDate import NormalDate
 
 
-class dynamic_drawing(Drawing):
+class DynamicDrawing(Drawing):
     def __init__(self, width=400, height=200, *nodes, **keywords):
         Drawing.__init__(self, width, height, *nodes, **keywords)
 
@@ -23,7 +23,7 @@ class dynamic_drawing(Drawing):
 
         return Drawing.getContents(self)
 
-class scenario_graph(Flowable):
+class ScenarioGraph(Flowable):
 
     def __init__(self
         , x=0
@@ -47,7 +47,7 @@ class scenario_graph(Flowable):
             cdate = str(graph.data[rowNo][colNo][0])
             d1 = self.params["peaks"][rowNo][0][0]
 
-            if d1 == cdate and cdate != str(graph.data[rowNo][-1][0]):
+            if d1 == cdate and cdate != str(graph.data[rowNo][-1][0]) and self.params["peaks"][rowNo][0][1] >= 1.0:
                 d = datetime.datetime.strptime(self.params["peaks"][rowNo][0][0], "%Y%m%d")
                 lbl = "{} Peak: {:,.0f} on {}".format(lbls[rowNo],self.params["peaks"][rowNo][0][1], d.strftime("%d-%b"))
 
@@ -76,8 +76,8 @@ class scenario_graph(Flowable):
 
     def draw(self):
 
-        d = dynamic_drawing(width=self.width, height=self.height)
-        d2 = dynamic_drawing(width=self.width, height=self.height)
+        d = DynamicDrawing(width=self.width, height=self.height)
+        d2 = DynamicDrawing(width=self.width, height=self.height)
 
         self.styles.add(ParagraphStyle(name='RightAlign', alignment=TA_RIGHT))
         self.styles.add(ParagraphStyle(name='LeftAlign', alignment=TA_LEFT))
@@ -451,5 +451,325 @@ class scenario_graph(Flowable):
         p.drawOn(self.canv, *self.coord( 0.75, 2.9, inch))
 
 
+
+        self.canv.restoreState()
+
+
+class ScenarioInflectedGraph(Flowable):
+
+    def __init__(self
+        , x=0
+        , y=0
+        , width=40
+        , params=None
+        ):
+        Flowable.__init__(self)
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = 4.125*inch
+        self.styles = getSampleStyleSheet()
+        self.params=params
+
+    def label_formatter(self, graph, rowNo, colNo, x, y):
+        lbl = ''
+        lbls = ['MedSurg', 'ICU', 'Ventilated', 'MedSurg', 'ICU', 'Ventilated', 'MedSurg', 'ICU', 'Ventilated', ]
+        voffset = 0
+        # if rowNo < 9:
+        #     cdate = str(graph.data[rowNo][colNo][0])
+        #     d1 = self.params["peaks"][rowNo][0][0]
+        #
+        #     if d1 == cdate and cdate != str(graph.data[rowNo][-1][0]) and self.params["peaks"][rowNo][0][1] >= 1.0:
+        #         d = datetime.datetime.strptime(self.params["peaks"][rowNo][0][0], "%Y%m%d")
+        #         lbl = "{} Peak: {:,.0f} on {}".format(lbls[rowNo],self.params["peaks"][rowNo][0][1], d.strftime("%d-%b"))
+        #
+        #     if lbls[rowNo] == 'ICU':
+        #         voffset = 8
+
+        return (lbl, voffset)
+
+    def coord(self, x, y, unit=1):
+        """
+        http://stackoverflow.com/questions/4726011/wrap-text-in-a-table-reportlab
+        Helper class to help position flowables in Canvas objects
+        """
+        x, y = x * unit, self.height -  y * unit
+        return x,y
+
+    def hlinecoord(self, x, y, len, unit=1):
+        x, y = x * unit, self.height -  y * unit
+        x1, y1 = x + (len * unit) , y
+        return x, y, x1, y1
+
+    def vlinecoord(self, x, y, len, unit=1):
+        x, y = x * unit, self.height -  y * unit
+        x1, y1 = x, y - (len * unit)
+        return x, y, x1, y1
+
+    def draw(self):
+
+        d = DynamicDrawing(width=self.width, height=self.height)
+        d2 = DynamicDrawing(width=self.width, height=self.height)
+
+        self.styles.add(ParagraphStyle(name='RightAlign', alignment=TA_RIGHT))
+        self.styles.add(ParagraphStyle(name='LeftAlign', alignment=TA_LEFT))
+        self.styles.add(ParagraphStyle(name='CenterAlign', alignment=TA_CENTER))
+
+        self.styles.add(ParagraphStyle(name='box_header'
+            , fontName = 'CalibriBd'
+            , fontSize = 5
+            , leading = 6
+            , textColor = "#43536a"
+            , alignment=TA_CENTER))
+
+        self.styles.add(ParagraphStyle(name='box_init'
+            , fontName = 'CalibriBd'
+            , fontSize = 8
+            , textColor = "#c00101"
+            , alignment=TA_CENTER))
+
+        self.styles.add(ParagraphStyle(name='today'
+            , fontName = 'CalibriBd'
+            , fontSize = 6
+            , textColor = "#c00101"
+            , alignment=TA_LEFT))
+
+        self.styles.add(ParagraphStyle(name='event'
+            , fontName = 'Calibri'
+            , fontSize = 5
+            , leading = 5
+            , textColor = "#43536a"
+            , alignment=TA_CENTER))
+
+        self.styles.add(ParagraphStyle(name='box_init_value'
+            , fontName = 'CalibriBd'
+            , fontSize = 12
+            , textColor = "#c00101"
+            , alignment=TA_CENTER))
+
+        self.styles.add(ParagraphStyle(name='box_result_title'
+            , fontName = 'Calibri'
+            , fontSize = 4
+            , textColor = "#000000"
+            , alignment=TA_CENTER))
+
+        self.styles.add(ParagraphStyle(name='box_result'
+            , fontName = 'Calibri'
+            , fontSize = 6
+            , textColor = "#000000"
+            , alignment=TA_CENTER))
+
+        self.canv.saveState()
+
+        chart = covid_chart()
+        chart.x = 0.0 * inch
+        chart.y = 0.0 * inch
+        chart.height = 4*inch
+        chart.width = 9*inch
+
+        chart.data = [
+            # self.params["hosp-sd-low"] ,
+            # self.params["icu-sd-low"],
+            # self.params["vent-sd-low"],
+            self.params["hosp-sd"],
+            self.params["icu-sd"],
+            self.params["vent-sd"],
+            # self.params["hosp-sd-high"],
+            # self.params["icu-sd-high"],
+            # self.params["vent-sd-high"],
+         ]
+
+        series = (
+            # 'MedSurg ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][0][0]*100),
+            # 'ICU ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][0][0]*100),
+            # 'Ventilated ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][0][0]*100),
+
+            'MedSurg',
+            'ICU',
+            'Ventilated',
+
+            # 'MedSurg ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][2][0]*100),
+            # 'ICU ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][2][0]*100),
+            # 'Ventilated ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][2][0]*100),
+            )
+        for i, s in enumerate(series): chart.lines[i].name = s
+
+        lbldates = []
+        for dt in self.params["labeled-dates"]:
+            lbldates.append(dt[0])
+
+        chart.xValueAxis.strokeWidth = 0.25
+        chart.xValueAxis.strokeColor = HexColor("#dddddddd", hasAlpha=True)
+        chart.xValueAxis.tickDown = 1 * mm
+        chart.xValueAxis.labels.fontName = "Calibri"
+        chart.xValueAxis.labels.fontSize = 5
+        chart.xValueAxis.labels.angle = -90
+        chart.xValueAxis.labels.dx = 3.3
+        chart.xValueAxis.labels.dy = -10.0
+        chart.xValueAxis.gridStrokeWidth = 0.25
+        chart.xValueAxis.gridStrokeColor = HexColor("#dddddddd", hasAlpha=True)
+        chart.xValueAxis.visibleGrid = 1
+        chart.xValueAxis.xLabelFormat = "{dd}-{mmm}"
+        chart.xValueAxis.forceFirstDate = chart.xValueAxis.forceEndDate = True
+        chart.xValueAxis.niceMonth = True
+        chart.xValueAxis.specifiedTickDates = lbldates
+
+        chart.yValueAxis.strokeWidth = 0.25
+        chart.yValueAxis.strokeColor = HexColor("#dddddd")
+        chart.yValueAxis.labels.fontName = "Calibri"
+        chart.yValueAxis.labels.fontSize = 6
+        chart.yValueAxis.labelTextFormat = "{:,.0f}"
+
+        ymax = ((self.params["ymax"] + 25) // 10) * 10
+
+        chart.yValueAxis.valueMin = 0
+        chart.yValueAxis.valueMax = ymax
+        chart.yValueAxis.valueStep = ymax // 10
+        # chart.yValueAxis.dumpProperties()
+
+        chart.lineLabelFormat = self.label_formatter
+        chart.lineLabels.fontName = "Calibri"
+        chart.lineLabels.fontSize = 5
+        chart.lineLabelNudge = 0.05 * inch
+
+        line_colors = [ HexColor("#5c9bd5ff", hasAlpha=True)
+                      , HexColor("#ffbf01ff", hasAlpha=True)
+                      , HexColor("#c00101ff", hasAlpha=True)]
+        line_widths = [ 1.5, 1.5, 1.5, ]
+
+        for idx, color in enumerate(line_colors):
+            chart.lines[idx].strokeColor = color
+            chart.lines[idx].strokeWidth = line_widths[idx]
+
+        if self.params["hosp-beds"][0][1] > 0:
+            lc = len(chart.data)
+            chart.data.append( self.params["hosp-beds"] )
+            chart.lines[lc].strokeDashArray = ( 1, 1 )
+            chart.lines[lc].strokeWidth = 0.5
+            chart.lines[lc].strokeColor = HexColor("#335aa2")
+            chart.lines[lc].name = "MedSurg Bed Capacity"
+
+        if self.params["icu-beds"][0][1] > 0:
+            lc = len(chart.data)
+            chart.data.append( self.params["icu-beds"] )
+            chart.lines[lc].strokeDashArray = ( 1, 1 )
+            chart.lines[lc].strokeWidth = 0.5
+            chart.lines[lc].strokeColor = HexColor("#ffbf01")
+            chart.lines[lc].name = "ICU Bed Capacity"
+
+        if self.params["vent-beds"][0][1] > 0:
+            lc = len(chart.data)
+            chart.data.append( self.params["vent-beds"] )
+            chart.lines[lc].strokeDashArray = ( 1, 1 )
+            chart.lines[lc].strokeWidth = 0.5
+            chart.lines[lc].strokeColor = HexColor("#c00101")
+            chart.lines[lc].name = "Ventilated Bed Capacity"
+
+        legend = Legend()
+
+        legend.alignment = 'right'
+        legend.x = 9.25*inch
+        legend.y = 1.0*inch
+        legend.colorNamePairs = Auto(obj=chart)
+        legend.columnMaximum = 12
+        legend.fontName = "Calibri"
+        legend.fontSize = 5
+        legend.deltay = 1
+
+        d.add(chart, 'graph')
+
+        d.add(legend)
+
+        leftm = (2.67 * 3 - 1) # aligning with the header
+        gap = 0.06
+        vp  = 0.25
+        col = (3 / 5)
+
+        has_medsurg = (self.params['beds'][0] > 0)
+        has_icu     = (self.params['beds'][1] > 0)
+        has_vent    = (self.params['beds'][2] > 0)
+
+        ladj = 0
+        if not has_medsurg: ladj += col
+        if not has_icu: ladj += col
+        if not has_vent: ladj += col
+
+        self.canv.restoreState()
+
+        d.drawOn( self.canv, 0, 0)
+
+        vp  = 0.25
+
+        self.canv.saveState()
+
+        self.canv.setStrokeColor("#c00101")
+        self.canv.setLineWidth(0.25)
+
+
+        # Mark Today
+        day_zero = chart.get_day_x(0)
+        self.canv.line(day_zero[0], day_zero[1], day_zero[0], day_zero[2]  )
+
+        p = Paragraph("Today", style=self.styles["today"])
+        p.wrapOn(self.canv, 0.75*inch, self.height*2)
+        p.drawOn(self.canv, day_zero[0] - 0.1*inch, day_zero[2])
+
+        self.canv.setFillColor("#c00101")
+        p = Polygon(points=[
+            day_zero[0] + 0.03*inch, day_zero[2] + 0.05*inch,
+            day_zero[0] - 0.03*inch, day_zero[2] + 0.05*inch,
+            day_zero[0], day_zero[2] - 0.25,
+            ])
+        p.fillColor = HexColor("#c00101")
+        p.strokeColor = HexColor("#ffffff")
+        p.strokeWidth = 0.01
+
+        d2.add(p)
+        d2.drawOn(self.canv, 0, 0)
+
+        print( self.params["mitigations"] )
+    #     for index, row in df.iterrows():
+    # print(row['c1'], row['c2'])
+
+        self.canv.setStrokeColor("#43536a")
+        for idx, row in self.params["mitigations"].iterrows():
+
+            note = "{i}. {n}".format(i=idx+1, n=row[-1])
+
+            tv = tw = stringWidth(note, "Calibri", 5) / inch
+            tw = max( tw, 0.75 * inch ) / 2
+            if tv > 0.75:
+                tv = 0.125/2 * inch
+            else :
+                tv = 0.0
+
+            vo = (( 1 + (idx % 10) )*0.125*inch) + (0.5*inch)
+
+            dt = row['mitigation_date']
+            day_zero = chart.get_day_x_by_date(dt)
+            self.canv.line(day_zero[0], day_zero[1], day_zero[0], day_zero[2] - vo )
+
+            p = Paragraph(note, style=self.styles["event"])
+            p.wrapOn(self.canv, 0.75*inch, self.height*2)
+            p.drawOn(self.canv, day_zero[0] - tw, day_zero[2] - vo + 0.08*inch)
+
+            self.canv.setFillColor("#43536a")
+            p = Polygon(points=[
+                day_zero[0] + 0.03*inch, day_zero[2] + 0.05*inch - vo,
+                day_zero[0] - 0.03*inch, day_zero[2] + 0.05*inch  - vo,
+                day_zero[0], day_zero[2] - 0.25  - vo,
+                ])
+            p.fillColor = HexColor("#43536a")
+            p.strokeColor = HexColor("#ffffff")
+            p.strokeWidth = 0.01
+
+            d2.add(p)
+            d2.drawOn(self.canv, 0, 0)
+
+        self.canv.translate(inch,inch)
+        self.canv.rotate(90)
+        p = Paragraph("Daily Inpatient Load (Projected Census)", style=self.styles["box_header"])
+        p.wrapOn(self.canv, 2*inch, self.height*2)
+        p.drawOn(self.canv, *self.coord( 0.75, 2.9, inch))
 
         self.canv.restoreState()

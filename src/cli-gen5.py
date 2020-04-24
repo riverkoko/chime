@@ -3,7 +3,7 @@
 from argparse import ( Action, ArgumentParser, )
 from datetime import datetime
 from datetime import date
-import pandas
+import pandas as pd
 from pandas import DataFrame
 from sys import stdout
 from logging import INFO, basicConfig, getLogger
@@ -15,7 +15,7 @@ import csv
 from penn_chime.constants import CHANGE_DATE
 from mhs_chime.parameters import Parameters, Disposition
 from penn_chime.model.sir import Sir as Model
-from mhs_chime.sir_with_inflections import Sir as InflectedModel
+from mhs_chime.SirWI import Sir as InflectedModel
 from clienv import ChimeCLIEnvironment
 from pdfgenerator.chime_pdf_generator import generate_pdf
 
@@ -34,7 +34,7 @@ basicConfig(
 logger = getLogger(__name__)
 
 VERBOSE = False
-OPEN_PDF = False
+OPEN_PDF = True
 
 class FromFile(Action):
     """From File."""
@@ -89,8 +89,9 @@ def parse_args(args):
         # generate_pdf: 0 = None, 1=PDF for each scenario, 2=One PDF for with all scenarios, 3=Both
     parser.add_argument("--generate-pdf", type=int, help="Generate PDF Report", default=1)
     parser.add_argument("--actuals-date", type=cast_date, help="Actuals Date", default=cast_date('1980-01-01') )
-    parser.add_argument("--mitigation-date", type=cast_date, help="Mitigation Start Date", default=None)
+    parser.add_argument("--mitigation-date", type=cast_date, help="Initial Mitigation", default=None)
     parser.add_argument("--mitigation-model", type=str, help="Model file with mitigations by date and impact", default=None)
+    parser.add_argument("--current-date", type=cast_date, help="Current Date", default=date.today())
 
     for arg, cast, min_value, max_value, help, required, default in (
         ("--current-hospitalized", int, 0, None, "Currently Hospitalized COVID-19 Patients (>= 0)", True, None ),
@@ -111,7 +112,6 @@ def parse_args(args):
         ("--population", int, 1, None, "Regional Population >= 1", True, None),
         ("--ventilated-days", int, 0, None, "Average Days on Ventilator", True, None),
         ("--ventilated-rate", float, 0.0, 1.0, "Ventilated Rate: 0.0 - 1.0", True, None),
-        ("--current-date", cast_date, None, None, "Current Date", True, date.today() ),
         ("--start-day", int, None, None, "Start day for model output", False, None),
         ("--data-key", str, None, None, "Key for linking for displays", False, None),
         ):
@@ -128,6 +128,10 @@ def main():
     data = DataFrame()
     head = DataFrame()
     computed_data = DataFrame()
+    mitigations = DataFrame()
+    miti_data = DataFrame()
+
+    m_start_date = date.today()
 
     cenv = ChimeCLIEnvironment()
 
@@ -138,7 +142,6 @@ def main():
         a = parse_args(x)
 
         logger.info("Processing %s", a.location)
-
 
         p = Parameters(
             current_hospitalized=a.current_hospitalized,
@@ -186,16 +189,25 @@ def main():
                         except ValueError :
                             continue
 
-                p.mitigation_model = sort_tuples(p.mitigation_model)
+                if len(p.mitigation_model) > 0 :
+                    p.mitigation_model = sort_tuples(p.mitigation_model)
+                    m_start_date = p.mitigation_model.pop(0)
+                else :
+                    p.mitigation_model = None # if there are no valid records, don't try the rest...
 
         fndata  = cenv.output_dir + "/chime-projection-" + a.scenario_id + ".csv"
         fncdata = cenv.output_dir + "/chime-computed-data-" + a.scenario_id + ".csv"
         fnhead  = cenv.output_dir + "/chime-parameters-" + a.scenario_id + ".csv"
+        fnmiti  = cenv.output_dir + "/chime-mitigations-" + a.scenario_id + ".csv"
+        fnmiti_data  = cenv.output_dir + "/chime-mitigations-" + a.scenario_id + ".csv"
 
         doubling_rates = [ [a.doubling_time_low, "dt-low"], [a.doubling_time_high, "dt-high"], [a.doubling_time_observed, "dt-observed"]] #, [ None, "dt-computed"]]
         contact_rates  = [ [a.relative_contact_rate, "sd-norm"], [a.relative_contact_rate_0, "sd-0"], [a.relative_contact_rate_1, "sd-1"] ]
 
         m = []
+        mit = []
+        mitis = DataFrame()
+        mf = None
 
         for d in ( doubling_rates ):
             mr = []
@@ -204,6 +216,8 @@ def main():
                 p.relative_contact_rate = r[0]
                 p.doubling_time = d[0]
                 p.date_first_hospitalized = None
+                p.current_date = a.current_date
+                p.n_days=a.n_days
 
                 if p.doubling_time is None and p.date_first_hospitalized is None:
                     p.doubling_time = doubling_rates[2][0]
@@ -221,16 +235,18 @@ def main():
 
                 mr.append( ds )
 
+            m.append(mr)
             if p.mitigation_model is not None:
 
                 p.relative_contact_rate = a.relative_contact_rate
                 p.doubling_time = d[0]
                 p.date_first_hospitalized = None
+                p.n_days=365
+                p.current_date = m_start_date[0]
 
                 if p.doubling_time is None and p.date_first_hospitalized is None:
                     p.doubling_time = doubling_rates[2][0]
 
-                # p.dumpProperties()
                 ds = InflectedModel (p)
 
                 suffix = ' ' + d[1] + ' sd-inflected'
@@ -241,30 +257,65 @@ def main():
                 ds.raw_df = ds.raw_df[[ "day", "susceptible", "infected", "recovered" ]]
                 ds.raw_df.rename(       columns = { 'susceptible':'susceptible' + suffix,   'infected':'infected' + suffix, 'recovered':'infected' + suffix }, inplace = True)
 
-                mr.append( ds )
+                # ds.dispositions_df["Doubling Model"] = d[1]
+                # ds.census_df["Doubling Model"] = d[1]
+                # ds.admits_df["Doubling Model"] = d[1]
+                # ds.raw_df["Doubling Model"] = d[1]
 
+                mit.append( ds )
 
-            m.append(mr)
+                for idx, miti in enumerate(p.mitigation_model) :
+                    row = {
+                        'scenario_id'         : [a.scenario_id],
+                        'init-model'          : [d[1]],
+                        'mitigation_date'     : [miti[0]],
+                        'sd'                  : [miti[1]],
+                        'r_t'                 : ds.r_t[idx],
+                        'doubling_time_t'     : ds.doubling_time_t[idx],
+                        'daily_growth_rate_t' : ds.daily_growth_rate_t[idx],
+                        'notes'               : [miti[2]],
+                        }
+                    mf = DataFrame(row)
+                    mf.to_csv( fnmiti, index=False )
+
+                    mitis = pd.concat([mitis, mf])
+                    mitis.reset_index(drop=True, inplace=True)
+
+                    mitigations = pd.concat([mitigations, mf])
+                    mitigations.reset_index(drop=True, inplace=True)
+
 
         # # assemble and merge datasets for output
         # # the second day column is to assist with a lookup function in Excel
 
         rf = DataFrame( m[0][0].census_df[['day']] )
+        if p.mitigation_model is not None:
+            mf = DataFrame( mit[0].census_df[['day']] )
         df = DataFrame( m[0][0].census_df[['day']] )
 
-        rf['Location'] = a.location
+        if p.mitigation_model is not None:
+            for ds in ( mit ) :
+                mf = mf.merge(ds.census_df).merge(ds.admits_df).merge(ds.raw_df ).merge(ds.dispositions_df)
 
-        rf["MedSurg Capacity"] = a.hosp_capacity
-        rf["ICU Capacity"] = a.icu_capacity
-        rf["Ventilators"] = a.vent_capacity
 
-        rf["Non-COVID19 MedSurg Occupancy"] = a.hosp_occupied
-        rf["Non-COVID19 ICU Occupancy"] = a.icu_occupied
-        rf["Non-COVID19 Ventilators in Use"] = a.vent_occupied
+        for f, v in (
+            ('Location', a.location),
+            ('MedSurg Capacity', a.hosp_capacity),
+            ('ICU Capacity', a.icu_capacity),
+            ('Ventilators', a.vent_capacity),
+            ('Non-COVID19 MedSurg Occupancy', a.hosp_occupied),
+            ('Non-COVID19 ICU Occupancy', a.icu_occupied),
+            ('Non-COVID19 Ventilators in Use', a.vent_occupied),
+            ):
+            rf[f] = v
+            if p.mitigation_model is not None:
+                mf[f] = v
 
+        # print ('post2', mf)
 
         if a.data_key is not None:
             rf['data key'] = a.data_key
+            if p.mitigation_model is not None: mf['data key'] = a.data_key
 
         df['day-r'] = rf['day']
 
@@ -272,18 +323,25 @@ def main():
             for ds in ( mr ) :
                 rf = rf.merge(ds.census_df).merge(ds.admits_df).merge(ds.raw_df ).merge(ds.dispositions_df)
 
+
         rf = rf.merge( df )
 
         if a.start_day is not None :
             rf = rf[rf['day'] >= a.start_day]
 
         rf.to_csv(fndata, index=False)
+        if p.mitigation_model is not None: mf.to_csv(fnmiti_data, index=False)
 
         if len(data.columns) == 0 :
             data = rf.copy()
         else :
-            data = pandas.concat([data, rf])
+            data = pd.concat([data, rf])
 
+        if p.mitigation_model is not None:
+            if len(miti_data.columns) == 0 :
+                miti_data = mf.copy()
+            else :
+                miti_data = pd.concat([miti_data, mf])
 
         # Report out the parameters used to run the model for reference
 
@@ -330,7 +388,7 @@ def main():
         if len(head.columns) == 0 :
             head = finfo.copy()
         else :
-            head = pandas.concat([head, finfo])
+            head = pd.concat([head, finfo])
 
         cdata = {
                 'scenario_id'            : [ a.scenario_id ],
@@ -363,16 +421,6 @@ def main():
                 'db dt-observed sd-norm' : [ m[2][0].doubling_time_t ],
                 'db dt-observed sd-0'    : [ m[2][1].doubling_time_t ],
                 'db dt-observed sd-1'    : [ m[2][2].doubling_time_t ],
-
-                # 'r0 dt-computed sd-norm' : [ m[3][0].r_naught ],
-                # 'r0 dt-computed sd-0'    : [ m[3][1].r_naught ],
-                # 'r0 dt-computed sd-1'    : [ m[3][2].r_naught ],
-                # 'rt dt-computed sd-norm' : [ m[3][0].r_t ],
-                # 'rt dt-computed sd-0'    : [ m[3][1].r_t ],
-                # 'rt dt-computed sd-1'    : [ m[3][2].r_t ],
-                # 'db dt-computed sd-norm' : [ m[3][0].doubling_time_t ],
-                # 'db dt-computed sd-0'    : [ m[3][1].doubling_time_t ],
-                # 'db dt-computed sd-1'    : [ m[3][2].doubling_time_t ]
                 }
 
         if a.data_key is not None:
@@ -384,13 +432,16 @@ def main():
         if len(computed_data.columns) == 0 :
             computed_data = cinfo.copy()
         else :
-            computed_data = pandas.concat([computed_data, cinfo])
+            computed_data = pd.concat([computed_data, cinfo])
+
+
 
         if a.generate_pdf == 1 or a.generate_pdf == 3 :
 
             pdf_file = cenv.output_dir + "/chime-" + a.scenario_id + ".pdf"
-            generate_pdf( pdf_file, rf, cinfo, finfo )
+            generate_pdf( pdf_file, rf, cinfo, finfo, mitis, mf )
             if OPEN_PDF: os.system( "open " + pdf_file)
+
 
         del cinfo
         del rf
@@ -411,22 +462,28 @@ def main():
     fndata  = cenv.output_dir + "/chime-projection.csv"
     fncdata = cenv.output_dir + "/chime-computed-data.csv"
     fnhead  = cenv.output_dir + "/chime-parameters.csv"
+    fnmiti  = cenv.output_dir + "/chime-mitigations.csv"
+    fnmiti_data = cenv.output_dir + "/chime-mitigation-data.csv"
 
     for df, name in (
         (data, fndata),
         (head, fnhead),
-        (computed_data, fncdata)
+        (computed_data, fncdata),
+        (mitigations, fnmiti),
+        (miti_data, fnmiti_data)
     ):
-        df.to_csv(name, index=False)
+        if len(df.index) > 0 :
+            df.to_csv(name, index=False)
 
-    data[["day", "census-hosp dt-low sd-norm", "census-hosp dt-low sd-inflected", "date"]].to_csv(cenv.output_dir + "/chime-test.csv", index=False)
-
+    # data[["day", "census-hosp dt-low sd-norm"
+    #     , "census-hosp dt-low sd-inflected"
+    #     , "date"]].to_csv(cenv.output_dir + "/chime-test.csv", index=False)
 
     if a.generate_pdf >= 2 :
         head.reset_index(drop=True, inplace=True)
         computed_data.reset_index(drop=True, inplace=True)
         pdf_file = cenv.output_dir + "/chime-report.pdf"
-        generate_pdf(pdf_file, data, computed_data, head )
+        generate_pdf(pdf_file, data, computed_data, head, mitigations, miti_data)
         if OPEN_PDF: os.system("open " + pdf_file)
 
     logger.info("Output directory: %s", cenv.output_dir)

@@ -10,7 +10,7 @@ from reportlab.graphics.shapes import Drawing, Rect, Line
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 
-class scenario_parameter_table(Flowable):
+class ScenarioParameterTable(Flowable):
 
     def __init__(self
         , x=0

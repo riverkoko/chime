@@ -8,7 +8,9 @@ COPY .streamlit .streamlit
 COPY defaults defaults
 COPY src src
 COPY st_app.py st_app.py
+
+COPY parameters parameters
+
 RUN pip install -q .
 
 CMD ["streamlit", "run", "st_app.py"]
-

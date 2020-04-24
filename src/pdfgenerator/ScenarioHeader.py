@@ -9,7 +9,7 @@ from reportlab.graphics.shapes import Drawing, Rect, Line
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 
-class scenario_header(Flowable):
+class ScenarioHeader(Flowable):
 
     def __init__(self
         , x=0
@@ -192,4 +192,91 @@ class scenario_header(Flowable):
 
         self.canv.restoreState()
 
-#162, 183, 224
+class ScenarioInflectedHeader(Flowable):
+
+    def __init__(self
+        , x=0
+        , y=-15
+        , width=40
+        , params=None
+        ):
+        Flowable.__init__(self)
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = inch * 0.3
+        self.styles = getSampleStyleSheet()
+        self.params=params
+
+    def coord(self, x, y, unit=1):
+        """
+        http://stackoverflow.com/questions/4726011/wrap-text-in-a-table-reportlab
+        Helper class to help position flowables in Canvas objects
+        """
+        x, y = x * unit, self.height -  y * unit
+        return x,y
+
+    def hlinecoord(self, x, y, len, unit=1):
+        x, y = x * unit, self.height -  y * unit
+        x1, y1 = x + (len * unit) , y
+        return x, y, x1, y1
+
+    def vlinecoord(self, x, y, len, unit=1):
+        x, y = x * unit, self.height -  y * unit
+        x1, y1 = x, y - (len * unit)
+        return x, y, x1, y1
+
+    def draw(self):
+        """
+        Draw the shape, text, etc
+        """
+        w, h = self.canv._pagesize
+
+        d = Drawing(width=self.width, height=self.height)
+
+        self.styles.add(ParagraphStyle(name='RightAlign', alignment=TA_RIGHT))
+        self.styles.add(ParagraphStyle(name='LeftAlign', alignment=TA_LEFT))
+        self.styles.add(ParagraphStyle(name='CenterAlign', alignment=TA_CENTER))
+
+        self.styles.add(ParagraphStyle(name='box_header'
+            , fontName = 'CalibriBd'
+            , fontSize = 5
+            , textColor = "#43536a"
+            , alignment=TA_CENTER))
+
+        self.styles.add(ParagraphStyle(name='section_inf_subhead'
+            , fontName = 'Calibri'
+            , fontSize = 6
+            , textColor = "#43536a"
+            , alignment=TA_LEFT))
+
+        self.styles.add(ParagraphStyle(name='section_inf_head'
+            , fontName = 'CalibriBd'
+            , fontSize = 12
+            , textColor = "#43536a"
+            , alignment=TA_LEFT))
+
+
+        self.styles.add(ParagraphStyle(name='box_init_value'
+            , fontName = 'CalibriBd'
+            , fontSize = 12
+            , textColor = "#c00101"
+            , alignment=TA_CENTER))
+
+        self.styles.add(ParagraphStyle(name='box_result_title'
+            , fontName = 'Calibri'
+            , fontSize = 4
+            , textColor = "#000000"
+            , alignment=TA_CENTER))
+
+        self.canv.saveState()
+
+        p = Paragraph("Social Distancing Adjusted for Local Responses (based on {} of {:0.1f} days)".format(self.params["scenario"], self.params["dbltime"]), style=self.styles["section_inf_head"])
+        p.wrapOn(self.canv, 10*inch, self.height*2)
+        p.drawOn(self.canv, *self.coord(0.0, 0.125, inch))
+
+        p = Paragraph("Initial Doubling Time between successive generations: {:0.1f} days ({})".format(self.params["dbltime"], self.params["scenario"]), style=self.styles["section_inf_subhead"])
+        p.wrapOn(self.canv, 10*inch, self.height*2)
+        p.drawOn(self.canv, *self.coord(0.0, 0.35, inch))
+
+        self.canv.restoreState()

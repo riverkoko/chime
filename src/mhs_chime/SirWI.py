@@ -71,35 +71,36 @@ class Sir:
             self.beta = get_beta(intrinsic_growth_rate,  gamma, self.susceptible, 0.0)
             self.beta_t = []
             for m in self.mitigation_model:
+                # self.beta_t.append(get_beta(intrinsic_growth_rate, self.gamma, self.susceptible, m[1] + p.relative_contact_rate_adj))
                 self.beta_t.append(get_beta(intrinsic_growth_rate, self.gamma, self.susceptible, m[1]))
 
-            if p.mitigation_date is None:
-                self.i_day = 0 # seed to the full length
-                raw = self.run_projection(p, [(self.beta, p.n_days)])
-                self.i_day = i_day = int(get_argmin_ds(raw["census_hospitalized"], p.current_hospitalized))
+            # if p.mitigation_date is None:
+            #     self.i_day = 0 # seed to the full length
+            #     raw = self.run_projection(p, [(self.beta, p.n_days)])
+            #     self.i_day = i_day = int(get_argmin_ds(raw["census_hospitalized"], p.current_hospitalized))
+            #
+            #     self.raw = self.run_projection(p, self.gen_policy(p))
+            #
+            #     if VERBOSE: logger.info('Set i_day = %s', i_day)
+            # else:
+            # projections = {}
+            best_i_day = -1
+            best_i_day_loss = float('inf')
+            for i_day in range(p.n_days):
+                self.i_day = i_day
+                raw = self.run_projection(p, self.gen_policy(p))
 
-                self.raw = self.run_projection(p, self.gen_policy(p))
+                # Don't fit against results that put the peak before the present day
+                if raw["census_hospitalized"].argmax() < i_day:
+                    continue
 
-                if VERBOSE: logger.info('Set i_day = %s', i_day)
-            else:
-                projections = {}
-                best_i_day = -1
-                best_i_day_loss = float('inf')
-                for i_day in range(p.n_days):
-                    self.i_day = i_day
-                    raw = self.run_projection(p, self.gen_policy(p))
+                loss = get_loss(raw["census_hospitalized"][i_day], p.current_hospitalized)
+                if loss < best_i_day_loss:
+                    best_i_day_loss = loss
+                    best_i_day = i_day
+                    self.raw = raw
 
-                    # Don't fit against results that put the peak before the present day
-                    if raw["census_hospitalized"].argmax() < i_day:
-                        continue
-
-                    loss = get_loss(raw["census_hospitalized"][i_day], p.current_hospitalized)
-                    if loss < best_i_day_loss:
-                        best_i_day_loss = loss
-                        best_i_day = i_day
-                        self.raw = raw
-
-                self.i_day = best_i_day
+            self.i_day = best_i_day
 
             if VERBOSE: logger.info(
                 'Estimated date_first_hospitalized: %s; current_date: %s; i_day: %s',
@@ -147,6 +148,7 @@ class Sir:
             self.beta = get_beta(intrinsic_growth_rate, self.gamma, self.susceptible, 0.0)
             self.beta_t = []
             for m in self.mitigation_model:
+                # self.beta_t.append(get_beta(intrinsic_growth_rate, self.gamma, self.susceptible, m[1] + p.relative_contact_rate_adj))
                 self.beta_t.append(get_beta(intrinsic_growth_rate, self.gamma, self.susceptible, m[1]))
             self.raw = self.run_projection(p, self.gen_policy(p))
 
@@ -239,30 +241,53 @@ class Sir:
         min_loss = pd.Series(losses).argmin()
         return min_loss
 
+    def mitigation_floor(self, mitigation_day, i_day):
+        return( max( mitigation_day, -i_day ) )
+        # if mitigation_day < -self.i_day:
+        #     mitigation_day = -self.i_day
+
+
     def gen_policy(self, p: Parameters) -> Sequence[Tuple[float, int]]:
         policy = []
 
-        total_days = remaining_days = self.i_day + p.n_days
+        total_days = self.i_day + p.n_days
+        pre_mitigation_days = 0
 
         betas = copy.deepcopy(self.beta_t)
         betas.insert(0, self.beta)
 
-        mitigation_days = []
-        run_m_day = 0
+        dates = [p.current_date]
         for m in self.mitigation_model:
-            m_day = -(p.current_date - m[0]).days
-            if m_day < -self.i_day:
-                m_day = -self.i_day
-            mitigation_days.append( self.i_day + m_day)
-            run_m_day = m_day
+            dates.append( m[0] )
+        # dates.append( p.current_date + timedelta(days=total_days))
 
-        mitigation_days.append( total_days - max(mitigation_days))
+        mitigation_days = []
+        for idx in range(len(dates)-1):
+            mitigation_days.append(self.mitigation_floor((dates[idx+1] - dates[idx]).days, self.i_day))
+            print( dates[idx], dates[idx+1], (dates[idx+1] - dates[idx]).days)
 
-        for r in range(len(betas)):
-            policy.append(( betas[r], mitigation_days[r]))
+        for r in range(len(betas)-1):
+            policy.append(( betas[r], mitigation_days[r] + self.i_day ))
+            pre_mitigation_days += mitigation_days[r] + self.i_day
+            pre_mitigation_days = min( pre_mitigation_days, total_days)
 
-        # if self.i_day == 0:
-        #     print (policy)
+        policy.append((betas[-1], total_days - pre_mitigation_days ))
+
+        t = 0
+        for i in policy :
+            t += i[1]
+
+        p.dumpProperties()
+        print ("dates", len(dates), dates)
+        print ("mitigation_days", len(mitigation_days), mitigation_days, sum(mitigation_days))
+        print( "betas", betas )
+        print ("policy", len(policy), policy)
+        print( "Total Days", t, "total_days", total_days)
+        print( "i_day", self.i_day, "p.n_days", p.n_days )
+        print("\n\n\n\n")
+
+        # assert( self.i_day < 5)
+        # assert( len(policy) > 10 )
 
         return policy
 

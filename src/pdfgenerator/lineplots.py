@@ -231,13 +231,22 @@ class LinePlot(AbstractLineChart):
         self._positions = P
 
     def get_day_x(self, day = 0):
+        d = []
+        for dat in self.data:
+            for v in dat:
+                d.append (v[1])
+        return (self.xValueAxis.scale(NormalDate() + day), self.yValueAxis.scale(0), self.yValueAxis.scale(max(d)))
+
+    def get_day_x_by_date(self, day = NormalDate()):
+
+        if not isinstance(day, NormalDate):
+            day = NormalDate(day)
 
         d = []
         for dat in self.data:
             for v in dat:
                 d.append (v[1])
-
-        return (self.xValueAxis.scale(NormalDate() + day), self.yValueAxis.scale(0), self.yValueAxis.scale(max(d)))
+        return (self.xValueAxis.scale(day), self.yValueAxis.scale(0), self.yValueAxis.scale(max(d)))
 
     def _innerDrawLabel(self, rowNo, colNo, x, y):
         "Draw a label for a given item in the list."
