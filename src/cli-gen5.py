@@ -19,6 +19,19 @@ from mhs_chime.SirWI import Sir as InflectedModel
 from clienv import ChimeCLIEnvironment
 from pdfgenerator.chime_pdf_generator import generate_pdf
 
+import zipfile
+
+
+def compress_csv(fname):
+    # cdir = os.getcwd()
+    rsp = fname.rsplit("/",1)
+    # os.chdir(rsp[0])
+    fn = rsp[1]
+    covid_zip = zipfile.ZipFile(fname.replace(".csv", ".zip"), 'w')
+    covid_zip.write(fname, arcname=fn, compress_type=zipfile.ZIP_DEFLATED)
+    covid_zip.close()
+    # os.chdir(cdir)
+
 def sort_tuples(tup):
     # reverse = None (Sorts in Ascending order)
     # key is set to sort using second element of
@@ -34,6 +47,7 @@ basicConfig(
 logger = getLogger(__name__)
 
 VERBOSE = False
+GENERATE_MASTER_PDF = True
 OPEN_PDF = True
 
 class FromFile(Action):
@@ -86,8 +100,9 @@ def parse_args(args):
 
     parser.add_argument("--current-precautionary", type=int, help="Currently Hospitalized Precautionary COVID-19 Patients (>= 0)", default=0 ),
 
-        # generate_pdf: 0 = None, 1=PDF for each scenario, 2=One PDF for with all scenarios, 3=Both
-    parser.add_argument("--generate-pdf", type=int, help="Generate PDF Report", default=1)
+    # generate_pdf: 0 = None, 1=Generate a PDF for each scenario
+    parser.add_argument("--create-pdf", type=int, help="Generate PDF Report for Scenario", default=0)
+    parser.add_argument("--create-csv", type=int, help="Generate CSV Output for Scenario", default=0)
     parser.add_argument("--actuals-date", type=cast_date, help="Actuals Date", default=cast_date('1980-01-01') )
     parser.add_argument("--mitigation-date", type=cast_date, help="Initial Mitigation", default=None)
     parser.add_argument("--mitigation-model", type=str, help="Model file with mitigations by date and impact", default=None)
@@ -160,10 +175,10 @@ def main():
             )
 
         if a.mitigation_model is not None and os.path.exists(cenv.sd_model_dir + a.mitigation_model):
-            # test for the mitigation model, assumes a single row for each
-            # date / social distancing pair with a date format of YYYY-MM-DD
-            # if there is a third column, the value is stored for pdf output
-            # additional notes on each row are ignored
+            # Test for the mitigation model, assumes a single row for each
+            # scenario, date, social distancing combination with a date format of YYYY-MM-DD.
+            # If there is a third column, the value is stored for pdf output
+            # additional notes on each row are ignored.
             #
             # lines that don't have a date or a valid float (0 <= x <= 1.0) are ignored
             #
@@ -174,17 +189,18 @@ def main():
                 for row in csv_reader:
                     if len(row) > 1:
                         try :
-                            year,month,day = row[0].split('-')
-                            d = date(int(year),int(month),int(day))
+                            if row[0] in ('*', a.scenario_id):
+                                year,month,day = row[1].split('-')
+                                d = date(int(year),int(month),int(day))
 
-                            sd = float( row[1] )
+                                sd = float( row[2] )
 
-                            note = ""
-                            if len(row)>2:
-                                note = row[2]
+                                note = ""
+                                if len(row)>3:
+                                    note = row[3]
 
-                            if sd >= 0 and sd <= 1.0 :
-                                p.mitigation_model.append([ d, sd, note ])
+                                if sd >= 0 and sd <= 1.0 :
+                                    p.mitigation_model.append([ d, sd, note ])
 
                         except ValueError :
                             continue
@@ -231,7 +247,7 @@ def main():
                 ds.admits_df.rename(       columns = { 'admits_hospitalized':'new-hosp' + suffix,   'admits_icu':'new-icu' + suffix, 'admits_ventilated':'new-vent' + suffix }, inplace = True)
 
                 ds.raw_df = ds.raw_df[[ "day", "susceptible", "infected", "recovered" ]]
-                ds.raw_df.rename(       columns = { 'susceptible':'susceptible' + suffix,   'infected':'infected' + suffix, 'recovered':'infected' + suffix }, inplace = True)
+                ds.raw_df.rename( columns = { 'susceptible':'susceptible' + suffix,   'infected':'infected' + suffix, 'recovered':'recovered' + suffix }, inplace = True)
 
                 mr.append( ds )
 
@@ -255,7 +271,7 @@ def main():
                 ds.admits_df.rename(       columns = { 'admits_hospitalized':'new-hosp' + suffix,   'admits_icu':'new-icu' + suffix, 'admits_ventilated':'new-vent' + suffix }, inplace = True)
 
                 ds.raw_df = ds.raw_df[[ "day", "susceptible", "infected", "recovered" ]]
-                ds.raw_df.rename(       columns = { 'susceptible':'susceptible' + suffix,   'infected':'infected' + suffix, 'recovered':'infected' + suffix }, inplace = True)
+                ds.raw_df.rename(       columns = { 'susceptible':'susceptible' + suffix,   'infected':'infected' + suffix, 'recovered':'recovered' + suffix }, inplace = True)
 
                 # ds.dispositions_df["Doubling Model"] = d[1]
                 # ds.census_df["Doubling Model"] = d[1]
@@ -276,14 +292,15 @@ def main():
                         'notes'               : [miti[2]],
                         }
                     mf = DataFrame(row)
-                    mf.to_csv( fnmiti, index=False )
+                    if a.create_csv == 1:
+                        mf.to_csv( fnmiti, index=False )
+                        compress_csv( fnmiti )
 
                     mitis = pd.concat([mitis, mf])
                     mitis.reset_index(drop=True, inplace=True)
 
                     mitigations = pd.concat([mitigations, mf])
                     mitigations.reset_index(drop=True, inplace=True)
-
 
         # # assemble and merge datasets for output
         # # the second day column is to assist with a lookup function in Excel
@@ -297,7 +314,6 @@ def main():
             for ds in ( mit ) :
                 mf = mf.merge(ds.census_df).merge(ds.admits_df).merge(ds.raw_df ).merge(ds.dispositions_df)
 
-
         for f, v in (
             ('Location', a.location),
             ('MedSurg Capacity', a.hosp_capacity),
@@ -310,8 +326,6 @@ def main():
             rf[f] = v
             if p.mitigation_model is not None:
                 mf[f] = v
-
-        # print ('post2', mf)
 
         if a.data_key is not None:
             rf['data key'] = a.data_key
@@ -329,8 +343,13 @@ def main():
         if a.start_day is not None :
             rf = rf[rf['day'] >= a.start_day]
 
-        rf.to_csv(fndata, index=False)
-        if p.mitigation_model is not None: mf.to_csv(fnmiti_data, index=False)
+        if a.create_csv == 1:
+            rf.to_csv(fndata, index=False)
+            compress_csv( fndata )
+
+        if (p.mitigation_model is not None) & (a.create_csv == 1):
+            mf.to_csv(fnmiti_data, index=False)
+            compress_csv( fnmiti_data )
 
         if len(data.columns) == 0 :
             data = rf.copy()
@@ -383,7 +402,9 @@ def main():
             param.update({ 'Data Key': [ a.data_key ], })
 
         finfo = DataFrame( param )
-        finfo.to_csv(fnhead, index=False)
+        if a.create_csv == 1:
+            finfo.to_csv(fnhead, index=False)
+            compress_csv(fnhead)
 
         if len(head.columns) == 0 :
             head = finfo.copy()
@@ -427,7 +448,9 @@ def main():
             cdata.update({ 'Data Key': [ a.data_key ], })
 
         cinfo = DataFrame( cdata )
-        cinfo.to_csv(fncdata, index=False)
+        if a.create_csv == 1 :
+            cinfo.to_csv(fncdata, index=False)
+            compress_csv( fncdata )
 
         if len(computed_data.columns) == 0 :
             computed_data = cinfo.copy()
@@ -436,28 +459,28 @@ def main():
 
 
 
-        if a.generate_pdf == 1 or a.generate_pdf == 3 :
-
+        if a.create_pdf == 1 :
+            logger.info("Generating PDF for %s", a.location)
             pdf_file = cenv.output_dir + "/chime-" + a.scenario_id + ".pdf"
             generate_pdf( pdf_file, rf, cinfo, finfo, mitis, mf )
             if OPEN_PDF: os.system( "open " + pdf_file)
-
 
         del cinfo
         del rf
         del m
         del finfo
 
-        op = open(cenv.output_dir + "/chime-" + a.scenario_id + ".csv", "w")
+        if a.create_csv == 1:
+            op = open(cenv.output_dir + "/chime-" + a.scenario_id + ".csv", "w")
 
-        for f in ( [fnhead, fncdata, fndata ] ) :
-            fo = open(f, "r")
-            op.write( fo.read() )
-            op.write("\n")
-            fo.close()
-            os.remove(f)
+            for f in ( [fnhead, fncdata, fndata ] ) :
+                fo = open(f, "r")
+                op.write( fo.read() )
+                op.write("\n")
+                fo.close()
+                os.remove(f)
 
-        op.close()
+            op.close()
 
     fndata  = cenv.output_dir + "/chime-projection.csv"
     fncdata = cenv.output_dir + "/chime-computed-data.csv"
@@ -474,12 +497,17 @@ def main():
     ):
         if len(df.index) > 0 :
             df.to_csv(name, index=False)
+            compress_csv( name )
+
+    # This code is for testing a small sample of the larger file and makes
+    # it a hair faster for visualization testing
 
     # data[["day", "census-hosp dt-low sd-norm"
     #     , "census-hosp dt-low sd-inflected"
     #     , "date"]].to_csv(cenv.output_dir + "/chime-test.csv", index=False)
 
-    if a.generate_pdf >= 2 :
+    if GENERATE_MASTER_PDF :
+        logger.info("Generating Master PDF")
         head.reset_index(drop=True, inplace=True)
         computed_data.reset_index(drop=True, inplace=True)
         pdf_file = cenv.output_dir + "/chime-report.pdf"
