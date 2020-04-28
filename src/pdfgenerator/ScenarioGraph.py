@@ -462,6 +462,7 @@ class ScenarioInflectedGraph(Flowable):
         , y=0
         , width=40
         , params=None
+        , sir=False
         ):
         Flowable.__init__(self)
         self.x = x
@@ -470,6 +471,7 @@ class ScenarioInflectedGraph(Flowable):
         self.height = 4.125*inch
         self.styles = getSampleStyleSheet()
         self.params=params
+        self.sir = sir
 
     def label_formatter(self, graph, rowNo, colNo, x, y):
         lbl = ''
@@ -562,36 +564,36 @@ class ScenarioInflectedGraph(Flowable):
         self.canv.saveState()
 
         chart = covid_chart()
-        chart.x = 0.0 * inch
+        chart.x = 0.5 * inch
         chart.y = 0.0 * inch
         chart.height = 4*inch
-        chart.width = 9*inch
+        chart.width = 8.5*inch
 
-        chart.data = [
-            # self.params["hosp-sd-low"] ,
-            # self.params["icu-sd-low"],
-            # self.params["vent-sd-low"],
-            self.params["hosp-sd"],
-            self.params["icu-sd"],
-            self.params["vent-sd"],
-            # self.params["hosp-sd-high"],
-            # self.params["icu-sd-high"],
-            # self.params["vent-sd-high"],
-         ]
+        if self.sir :
+            chart.data = [
+                self.params["susceptible"],
+                self.params["infected"],
+                self.params["recovered"],
+             ]
+        else:
+            chart.data = [
+                self.params["hosp-sd"],
+                self.params["icu-sd"],
+                self.params["vent-sd"],
+             ]
 
-        series = (
-            # 'MedSurg ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][0][0]*100),
-            # 'ICU ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][0][0]*100),
-            # 'Ventilated ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][0][0]*100),
-
-            'MedSurg',
-            'ICU',
-            'Ventilated',
-
-            # 'MedSurg ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][2][0]*100),
-            # 'ICU ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][2][0]*100),
-            # 'Ventilated ({sd:.0f}% reduction in social contact)'.format(sd=self.params["sd"][2][0]*100),
-            )
+        if not self.sir :
+            series = (
+                'MedSurg',
+                'ICU',
+                'Ventilated',
+                )
+        else:
+            series = (
+                'Susceptible Population',
+                'Infected',
+                'Recovered',
+                )
         for i, s in enumerate(series): chart.lines[i].name = s
 
         lbldates = []
@@ -641,29 +643,30 @@ class ScenarioInflectedGraph(Flowable):
             chart.lines[idx].strokeColor = color
             chart.lines[idx].strokeWidth = line_widths[idx]
 
-        if self.params["hosp-beds"][0][1] > 0:
-            lc = len(chart.data)
-            chart.data.append( self.params["hosp-beds"] )
-            chart.lines[lc].strokeDashArray = ( 1, 1 )
-            chart.lines[lc].strokeWidth = 0.5
-            chart.lines[lc].strokeColor = HexColor("#335aa2")
-            chart.lines[lc].name = "MedSurg Bed Capacity"
+        if not self.sir:
+            if self.params["hosp-beds"][0][1] > 0:
+                lc = len(chart.data)
+                chart.data.append( self.params["hosp-beds"] )
+                chart.lines[lc].strokeDashArray = ( 1, 1 )
+                chart.lines[lc].strokeWidth = 0.5
+                chart.lines[lc].strokeColor = HexColor("#335aa2")
+                chart.lines[lc].name = "MedSurg Bed Capacity"
 
-        if self.params["icu-beds"][0][1] > 0:
-            lc = len(chart.data)
-            chart.data.append( self.params["icu-beds"] )
-            chart.lines[lc].strokeDashArray = ( 1, 1 )
-            chart.lines[lc].strokeWidth = 0.5
-            chart.lines[lc].strokeColor = HexColor("#ffbf01")
-            chart.lines[lc].name = "ICU Bed Capacity"
+            if self.params["icu-beds"][0][1] > 0:
+                lc = len(chart.data)
+                chart.data.append( self.params["icu-beds"] )
+                chart.lines[lc].strokeDashArray = ( 1, 1 )
+                chart.lines[lc].strokeWidth = 0.5
+                chart.lines[lc].strokeColor = HexColor("#ffbf01")
+                chart.lines[lc].name = "ICU Bed Capacity"
 
-        if self.params["vent-beds"][0][1] > 0:
-            lc = len(chart.data)
-            chart.data.append( self.params["vent-beds"] )
-            chart.lines[lc].strokeDashArray = ( 1, 1 )
-            chart.lines[lc].strokeWidth = 0.5
-            chart.lines[lc].strokeColor = HexColor("#c00101")
-            chart.lines[lc].name = "Ventilated Bed Capacity"
+            if self.params["vent-beds"][0][1] > 0:
+                lc = len(chart.data)
+                chart.data.append( self.params["vent-beds"] )
+                chart.lines[lc].strokeDashArray = ( 1, 1 )
+                chart.lines[lc].strokeWidth = 0.5
+                chart.lines[lc].strokeColor = HexColor("#c00101")
+                chart.lines[lc].name = "Ventilated Bed Capacity"
 
         legend = Legend()
 
@@ -727,10 +730,6 @@ class ScenarioInflectedGraph(Flowable):
         d2.add(p)
         d2.drawOn(self.canv, 0, 0)
 
-        print( self.params["mitigations"] )
-    #     for index, row in df.iterrows():
-    # print(row['c1'], row['c2'])
-
         self.canv.setStrokeColor("#43536a")
         for idx, row in self.params["mitigations"].iterrows():
 
@@ -766,10 +765,15 @@ class ScenarioInflectedGraph(Flowable):
             d2.add(p)
             d2.drawOn(self.canv, 0, 0)
 
-        self.canv.translate(inch,inch)
+        self.canv.translate(-0.5*inch, 2*inch)
         self.canv.rotate(90)
-        p = Paragraph("Daily Inpatient Load (Projected Census)", style=self.styles["box_header"])
+        if self.sir :
+            p = Paragraph("Total Impacted Population", style=self.styles["box_header"])
+        else:
+            p = Paragraph("Daily Inpatient Load (Projected Census)", style=self.styles["box_header"])
+        # p.wrapOn(self.canv, 2*inch, self.height*2)
+        # p.drawOn(self.canv, *self.coord( 0.75, 2.9, inch))
         p.wrapOn(self.canv, 2*inch, self.height*2)
-        p.drawOn(self.canv, *self.coord( 0.75, 2.9, inch))
+        p.drawOn(self.canv, *self.coord( -1.5, 4.7, inch))
 
         self.canv.restoreState()

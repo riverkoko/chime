@@ -271,7 +271,7 @@ class ScenarioInflectedHeader(Flowable):
 
         self.canv.saveState()
 
-        p = Paragraph("Social Distancing Adjusted for Local Responses (based on {} of {:0.1f} days)".format(self.params["scenario"], self.params["dbltime"]), style=self.styles["section_inf_head"])
+        p = Paragraph("Social Distancing Adjusted for Local Responses", style=self.styles["section_inf_head"])
         p.wrapOn(self.canv, 10*inch, self.height*2)
         p.drawOn(self.canv, *self.coord(0.0, 0.125, inch))
 

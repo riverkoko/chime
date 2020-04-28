@@ -17,6 +17,7 @@ from reportlab.lib import colors
 from pdfgenerator.ScenarioHeader import ScenarioHeader, ScenarioInflectedHeader
 from pdfgenerator.ScenarioGraph import ScenarioGraph, ScenarioInflectedGraph
 # from pdfgenerator.ScenarioParameterTable import ScenarioParameterTable
+from pdfgenerator.ScenarioMitigationTable import ScenarioMitigationTable
 from reportlab.lib.colors import HexColor
 
 from penn_chime.constants import VERSION
@@ -58,6 +59,7 @@ def format_parameter(pv):
         v = "None"
 
     return v
+
 def max_peak( p, n_days ) :
     if p >= n_days or p <= 0 : return None
     return p
@@ -306,13 +308,13 @@ def get_graph_parameters(current_scenario, model_name, cd, sp, data) :
 
     return param
 
-def get_inflected_graph_parameters(current_scenario, model_name, sp, data, mitigations ) :
+def get_inflected_graph_parameters(current_scenario, model_name, sp, data, mitigations, sir=False ) :
 
     scenario_location = sp.loc[current_scenario]["Scenario ID"]
 
     rf = data[data['Location'] == scenario_location]
 
-    model_cols = [col for col in rf.columns if 'dt-{m}'.format(m=model_name) in col and "inflected" in col and "census" in col]
+    model_cols = [col for col in rf.columns if 'dt-{m}'.format(m=model_name) in col and "inflected" in col and ("census" in col or "susceptible" in col or "recovered" in col or "infected" in col)]
     model_cols.append( "MedSurg Capacity" )
     model_cols.append( "ICU Capacity")
     model_cols.append( "Ventilators")
@@ -329,12 +331,15 @@ def get_inflected_graph_parameters(current_scenario, model_name, sp, data, mitig
         "census-hosp dt-{m} sd-inflected".format(m=model_name)      : 'census-hosp-sd',
         "census-icu dt-{m} sd-inflected".format(m=model_name)       : 'census-icu-sd',
         "census-vent dt-{m} sd-inflected".format(m=model_name)      : 'census-vent-sd',
-        "MedSurg Capacity"                                 : "hosp-beds",
-        "ICU Capacity"                                     : "icu-beds",
-        "Ventilators"                                      : "vent-beds",
-        "Non-COVID19 MedSurg Occupancy"                    : "hosp-occ",
-        "Non-COVID19 ICU Occupancy"                        : "icu-occ",
-        "Non-COVID19 Ventilators in Use"                   : "vent-occ",
+        "susceptible dt-{m} sd-inflected".format(m=model_name)      : 'susceptible',
+        "infected dt-{m} sd-inflected".format(m=model_name)         : 'infected',
+        "recovered dt-{m} sd-inflected".format(m=model_name)        : 'recovered',
+        "MedSurg Capacity"                                          : "hosp-beds",
+        "ICU Capacity"                                              : "icu-beds",
+        "Ventilators"                                               : "vent-beds",
+        "Non-COVID19 MedSurg Occupancy"                             : "hosp-occ",
+        "Non-COVID19 ICU Occupancy"                                 : "icu-occ",
+        "Non-COVID19 Ventilators in Use"                            : "vent-occ",
         }, inplace = True
     )
 
@@ -346,11 +351,12 @@ def get_inflected_graph_parameters(current_scenario, model_name, sp, data, mitig
 
     cf["date"] = x
     cf["day"] = rf["day"]
-    for col in [
-        "census-hosp-sd",
-        "census-icu-sd",
-        "census-vent-sd",
-        ]:
+    if sir :
+        cols = ["susceptible", "infected", "recovered", ]
+    else :
+        cols = ["census-hosp-sd", "census-icu-sd", "census-vent-sd", ]
+
+    for col in cols:
         cf[col] = smoothed_line(x, rf[col].values)
 
     cf['date'] = cf['date'].apply( lambda a : excel_to_normaldate(a).strftime("%Y%m%d"))
@@ -360,9 +366,6 @@ def get_inflected_graph_parameters(current_scenario, model_name, sp, data, mitig
 
     param = {
         'labeled-dates': cf[["date"]].iloc[::7, :].values.tolist(),
-        'hosp-sd'      : cf[["date", "census-hosp-sd"]].values.tolist(),
-        'icu-sd'       : cf[["date", "census-icu-sd"]].values.tolist(),
-        'vent-sd'      : cf[["date", "census-vent-sd"]].values.tolist(),
         'hosp-beds'    : cf[["date", "hosp-beds"]].values.tolist(),
         'icu-beds'     : cf[["date", "icu-beds"]].values.tolist(),
         'vent-beds'    : cf[["date", "vent-beds"]].values.tolist(),
@@ -370,6 +373,16 @@ def get_inflected_graph_parameters(current_scenario, model_name, sp, data, mitig
         'icu-occ'      : cf[["date", "icu-occ"]].values.tolist(),
         'vent-occ'     : cf[["date", "vent-occ"]].values.tolist(),
     }
+    if sir:
+        param.update( {
+            'susceptible'  : cf[["date", "susceptible"]].values.tolist(),
+            'infected'     : cf[["date", "infected"]].values.tolist(),
+            'recovered'    : cf[["date", "recovered"]].values.tolist(), })
+    else:
+        param.update({
+            'hosp-sd'      : cf[["date", "census-hosp-sd"]].values.tolist(),
+            'icu-sd'       : cf[["date", "census-icu-sd"]].values.tolist(),
+            'vent-sd'      : cf[["date", "census-vent-sd"]].values.tolist(),})
 
     param.update( { 'current-inpatient' : (
         sp['Currently Hospitalized COVID-19 Patients (>= 0)'][current_scenario],
@@ -377,41 +390,50 @@ def get_inflected_graph_parameters(current_scenario, model_name, sp, data, mitig
         )
     } )
 
-    param.update( { 'peaks' : (
-        cf[["date", "census-hosp-sd", "day"]][cf[["date", "census-hosp-sd", "day"]]["census-hosp-sd"] == cf[["date", "census-hosp-sd", "day"]]["census-hosp-sd"].max()].values.tolist(),
-        cf[["date", "census-icu-sd" , "day"]][cf[["date", "census-icu-sd" , "day"]]["census-icu-sd"]  == cf[["date", "census-icu-sd" , "day"]]["census-icu-sd"].max()].values.tolist(),
-        cf[["date", "census-vent-sd", "day"]][cf[["date", "census-vent-sd", "day"]]["census-vent-sd"] == cf[["date", "census-vent-sd", "day"]]["census-vent-sd"].max()].values.tolist(),
-        )
-    } )
+    if not sir:
+        param.update( { 'peaks' : (
+            cf[["date", "census-hosp-sd", "day"]][cf[["date", "census-hosp-sd", "day"]]["census-hosp-sd"] == cf[["date", "census-hosp-sd", "day"]]["census-hosp-sd"].max()].values.tolist(),
+            cf[["date", "census-icu-sd" , "day"]][cf[["date", "census-icu-sd" , "day"]]["census-icu-sd"]  == cf[["date", "census-icu-sd" , "day"]]["census-icu-sd"].max()].values.tolist(),
+            cf[["date", "census-vent-sd", "day"]][cf[["date", "census-vent-sd", "day"]]["census-vent-sd"] == cf[["date", "census-vent-sd", "day"]]["census-vent-sd"].max()].values.tolist(),
+            )
+        } )
 
-    n_days = sp['Days to Project'][current_scenario]
-    pk = [
-        max_peak( param['peaks'][0][0][2], n_days),
-        max_peak( param['peaks'][1][0][2], n_days),
-        max_peak( param['peaks'][2][0][2], n_days),
-    ]
-    print(pk)
+    if not sir:
+        n_days = sp['Days to Project'][current_scenario]
+        pk = [
+            max_peak( param['peaks'][0][0][2], n_days),
+            max_peak( param['peaks'][1][0][2], n_days),
+            max_peak( param['peaks'][2][0][2], n_days),
+        ]
 
-    param.update( { 'peak-day' : pk } )
+        param.update( { 'peak-day' : pk } )
 
-    pk = [
-        cf[["census-hosp-sd"]]["census-hosp-sd"].max(),
-        cf[["census-icu-sd"]]["census-icu-sd"].max(),
-        cf[["census-vent-sd"]]["census-vent-sd"].max(),
+    if sir:
+        pk = [
+            cf[["infected"]]["infected"].max(),
+            cf[["susceptible"]]["susceptible"].max(),
+            cf[["recovered"]]["recovered"].max(),
+        ]
+    else :
+        pk = [
+            cf[["census-hosp-sd"]]["census-hosp-sd"].max(),
+            cf[["census-icu-sd"]]["census-icu-sd"].max(),
+            cf[["census-vent-sd"]]["census-vent-sd"].max(),
 
-        sp.loc[current_scenario]["MedSurg Capacity"],
-        sp.loc[current_scenario]["ICU Capacity"],
-        sp.loc[current_scenario]["Ventilator Capacity"],
-    ]
+            sp.loc[current_scenario]["MedSurg Capacity"],
+            sp.loc[current_scenario]["ICU Capacity"],
+            sp.loc[current_scenario]["Ventilator Capacity"],
+        ]
 
     param.update( { 'ymax' : np.max( pk ) })
 
-    param.update( { 'capacity' : (
-        next(iter(cf[["date", "day"]][cf[["date", "census-hosp-sd", "day"]]["census-hosp-sd"] >= cf["hosp-beds"]].values.tolist()), None),
-        next(iter(cf[["date", "day"]][cf[["date", "census-icu-sd" , "day"]]["census-icu-sd"]  >= cf["icu-beds"]].values.tolist()), None),
-        next(iter(cf[["date", "day"]][cf[["date", "census-vent-sd", "day"]]["census-vent-sd"] >= cf["vent-beds"]].values.tolist()), None),
-        )
-    } )
+    if not sir:
+        param.update( { 'capacity' : (
+            next(iter(cf[["date", "day"]][cf[["date", "census-hosp-sd", "day"]]["census-hosp-sd"] >= cf["hosp-beds"]].values.tolist()), None),
+            next(iter(cf[["date", "day"]][cf[["date", "census-icu-sd" , "day"]]["census-icu-sd"]  >= cf["icu-beds"]].values.tolist()), None),
+            next(iter(cf[["date", "day"]][cf[["date", "census-vent-sd", "day"]]["census-vent-sd"] >= cf["vent-beds"]].values.tolist()), None),
+            )
+        } )
 
     param.update( { 'beds' : (
 
@@ -570,12 +592,18 @@ def generate_pdf(pdf_file, projected_data, computed_data, scenario_parameters, m
 
         if len(mitigations.columns) >0 :
 
-            miti = mitigations[mitigations['init-model'] == 'dt-low']
+            miti = mitigations.loc[(mitigations['init-model'] == 'dt-observed') & (mitigations['scenario_id'] == scenario)]
+            # print ( "\n\n\n", scenario, "\n\n\n")
+            # print ( "\n\n\n", mitigations, "\n\n\n")
+            # print ( "\n\n\n", miti, "\n\n\n")
             if len(miti.index) > 0 :
                 elements.append(PageBreak())
                 elements.append(ScenarioInflectedHeader(params=get_header_parameters(current_scenario_id, "observed",  computed_data, scenario_parameters)))
                 elements.append(ScenarioInflectedGraph(params=get_inflected_graph_parameters(current_scenario_id, "observed", scenario_parameters, mitigation_data, miti)))
-                elements.append(Spacer(0, 0.125*inch ))
+                elements.append(Spacer(0, 0.5*inch ))
+                elements.append(ScenarioInflectedGraph(params=get_inflected_graph_parameters(current_scenario_id, "observed", scenario_parameters, mitigation_data, miti, True),sir=True))
+                elements.append(Spacer(0, 0.5*inch ))
+                elements.append(ScenarioMitigationTable(mitigations=miti).getTable())
 
         current_scenario_id += 1
 

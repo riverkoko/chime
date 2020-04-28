@@ -264,7 +264,7 @@ class Sir:
         mitigation_days = []
         for idx in range(len(dates)-1):
             mitigation_days.append(self.mitigation_floor((dates[idx+1] - dates[idx]).days, self.i_day))
-            print( dates[idx], dates[idx+1], (dates[idx+1] - dates[idx]).days)
+            # print( dates[idx], dates[idx+1], (dates[idx+1] - dates[idx]).days)
 
         for r in range(len(betas)-1):
             policy.append(( betas[r], mitigation_days[r] + self.i_day ))
@@ -277,14 +277,14 @@ class Sir:
         for i in policy :
             t += i[1]
 
-        p.dumpProperties()
-        print ("dates", len(dates), dates)
-        print ("mitigation_days", len(mitigation_days), mitigation_days, sum(mitigation_days))
-        print( "betas", betas )
-        print ("policy", len(policy), policy)
-        print( "Total Days", t, "total_days", total_days)
-        print( "i_day", self.i_day, "p.n_days", p.n_days )
-        print("\n\n\n\n")
+        # p.dumpProperties()
+        # print ("dates", len(dates), dates)
+        # print ("mitigation_days", len(mitigation_days), mitigation_days, sum(mitigation_days))
+        # print( "betas", betas )
+        # print ("policy", len(policy), policy)
+        # print( "Total Days", t, "total_days", total_days)
+        # print( "i_day", self.i_day, "p.n_days", p.n_days )
+        # print("\n\n\n\n")
 
         # assert( self.i_day < 5)
         # assert( len(policy) > 10 )
