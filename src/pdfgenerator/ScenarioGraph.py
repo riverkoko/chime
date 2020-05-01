@@ -166,6 +166,10 @@ class ScenarioGraph(Flowable):
         line.xValueAxis.tickDown = 1 * mm
         line.xValueAxis.labels.fontName = "Calibri"
         line.xValueAxis.labels.fontSize = 5
+        line.xValueAxis.labels.angle = -90
+        line.xValueAxis.labels.dx = 3.3
+        line.xValueAxis.labels.dy = -10.0
+
         line.xValueAxis.gridStrokeWidth = 0.25
         line.xValueAxis.gridStrokeColor = HexColor("#dddddddd", hasAlpha=True)
         line.xValueAxis.visibleGrid = 1

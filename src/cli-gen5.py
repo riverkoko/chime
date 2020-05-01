@@ -21,16 +21,13 @@ from pdfgenerator.chime_pdf_generator import generate_pdf
 
 import zipfile
 
-
-def compress_csv(fname):
-    # cdir = os.getcwd()
-    rsp = fname.rsplit("/",1)
-    # os.chdir(rsp[0])
+def compress_file(archive_name, file_name):
+    rsp = file_name.rsplit("/",1)
     fn = rsp[1]
-    covid_zip = zipfile.ZipFile(fname.replace(".csv", ".zip"), 'w')
-    covid_zip.write(fname, arcname=fn, compress_type=zipfile.ZIP_DEFLATED)
+    covid_zip = zipfile.ZipFile(archive_name, 'a')
+    # covid_zip = zipfile.ZipFile(fname.replace(".csv", ".zip"), 'a')
+    covid_zip.write(file_name, arcname=fn, compress_type=zipfile.ZIP_DEFLATED)
     covid_zip.close()
-    # os.chdir(cdir)
 
 def sort_tuples(tup):
     # reverse = None (Sorts in Ascending order)
@@ -149,6 +146,7 @@ def main():
     m_start_date = date.today()
 
     cenv = ChimeCLIEnvironment()
+    archive_name = cenv.output_dir + "/" + cenv.archive_file_name
 
     f = open(cenv.parameters_file, "r")
     for x in f:
@@ -294,7 +292,7 @@ def main():
                     mf = DataFrame(row)
                     if a.create_csv == 1:
                         mf.to_csv( fnmiti, index=False )
-                        compress_csv( fnmiti )
+                        compress_file( archive_name, fnmiti )
 
                     mitis = pd.concat([mitis, mf])
                     mitis.reset_index(drop=True, inplace=True)
@@ -345,11 +343,11 @@ def main():
 
         if a.create_csv == 1:
             rf.to_csv(fndata, index=False)
-            compress_csv( fndata )
+            compress_file(archive_name, fndata )
 
         if (p.mitigation_model is not None) & (a.create_csv == 1):
             mf.to_csv(fnmiti_data, index=False)
-            compress_csv( fnmiti_data )
+            compress_file(archive_name, fnmiti_data )
 
         if len(data.columns) == 0 :
             data = rf.copy()
@@ -404,7 +402,7 @@ def main():
         finfo = DataFrame( param )
         if a.create_csv == 1:
             finfo.to_csv(fnhead, index=False)
-            compress_csv(fnhead)
+            compress_file(archive_name, fnhead)
 
         if len(head.columns) == 0 :
             head = finfo.copy()
@@ -450,7 +448,7 @@ def main():
         cinfo = DataFrame( cdata )
         if a.create_csv == 1 :
             cinfo.to_csv(fncdata, index=False)
-            compress_csv( fncdata )
+            compress_file(archive_name, fncdata )
 
         if len(computed_data.columns) == 0 :
             computed_data = cinfo.copy()
@@ -463,6 +461,7 @@ def main():
             logger.info("Generating PDF for %s", a.location)
             pdf_file = cenv.output_dir + "/chime-" + a.scenario_id + ".pdf"
             generate_pdf( pdf_file, rf, cinfo, finfo, mitis, mf )
+            compress_file(archive_name, pdf_file )
             if OPEN_PDF: os.system( "open " + pdf_file)
 
         del cinfo
@@ -497,7 +496,7 @@ def main():
     ):
         if len(df.index) > 0 :
             df.to_csv(name, index=False)
-            compress_csv( name )
+            compress_file(archive_name, name )
 
     # This code is for testing a small sample of the larger file and makes
     # it a hair faster for visualization testing
@@ -512,6 +511,7 @@ def main():
         computed_data.reset_index(drop=True, inplace=True)
         pdf_file = cenv.output_dir + "/chime-report.pdf"
         generate_pdf(pdf_file, data, computed_data, head, mitigations, miti_data)
+        compress_file(archive_name, pdf_file )
         if OPEN_PDF: os.system("open " + pdf_file)
 
     logger.info("Output directory: %s", cenv.output_dir)

@@ -38,3 +38,5 @@ class ChimeCLIEnvironment :
         self.run_datetime = datetime.now(tz_NY)
         self.output_dir += t
         os.mkdir(self.output_dir)
+
+        self.archive_file_name = "chime-" + datetime.now(tz_NY).strftime("%Y%m%d-%H%M%S") + ".zip"
