@@ -13,11 +13,12 @@ import os
 import csv
 
 from penn_chime.constants import CHANGE_DATE
-from mhs_chime.parameters import Parameters, Disposition
+from penn_chime.model.parameters import Parameters, Disposition
 from penn_chime.model.sir import Sir as Model
 from mhs_chime.SirWI import Sir as InflectedModel
 from clienv import ChimeCLIEnvironment
 from pdfgenerator.chime_pdf_generator import generate_pdf
+from mhs_chime.dumpProperties import dumpProperties
 
 import zipfile
 
@@ -154,6 +155,9 @@ def main():
 
         a = parse_args(x)
 
+        a.scenario_id = a.scenario_id.replace("_", " ")
+        a.location = a.location.replace("_", " ")
+
         logger.info("Processing %s", a.location)
 
         p = Parameters(
@@ -236,7 +240,7 @@ def main():
                 if p.doubling_time is None and p.date_first_hospitalized is None:
                     p.doubling_time = doubling_rates[2][0]
 
-                # p.dumpProperties()
+                # dumpProperties(p, "Parameters for {}".format(a.scenario_id))
                 ds = Model (p)
 
                 suffix = ' ' + d[1] + ' ' + r[1]
