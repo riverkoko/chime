@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import copy
 
-from .parameters import Parameters
+from penn_chime.model.parameters import Parameters
 
 
 basicConfig(
